@@ -2,12 +2,17 @@
 
 import { getSession } from '@/app/lib/auth';
 import { toggleAgentShadowMode, acknowledgeAgentDrift, getAgentById, getDb, generateId, now } from '@/app/lib/db';
+import { hasPermission } from '@/app/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 export async function toggleShadowModeAction(agentId: string, enabled: boolean) {
   const session = await getSession();
   if (!session) {
     return { success: false, error: 'Unauthorized: Session required' };
+  }
+
+  if (!hasPermission(session.role, 'agent.manage')) {
+    return { success: false, error: 'Permission denied: agent.manage capability required' };
   }
 
   try {
@@ -41,6 +46,10 @@ export async function acknowledgeDriftAction(agentId: string) {
   const session = await getSession();
   if (!session) {
     return { success: false, error: 'Unauthorized: Session required' };
+  }
+
+  if (!hasPermission(session.role, 'agent.manage')) {
+    return { success: false, error: 'Permission denied: agent.manage capability required' };
   }
 
   try {

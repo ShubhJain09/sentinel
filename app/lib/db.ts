@@ -15,8 +15,32 @@ import type {
   Agent,
   AiConversation,
   AiChatMessage,
-  ConnectedAccount
+  ConnectedAccount,
+  Notification
 } from '@/app/lib/types';
+
+/**
+ * ==============================================================================
+ * SENTINEL — DATABASE SUBSYSTEM (SQLite + Better-SQLite3)
+ * ==============================================================================
+ * 
+ * Why SQLite with Better-SQLite3?
+ * - Zero Network Latency: Queries execute synchronously in-process via C++ bindings.
+ * - Single-file Portability: Entire application state is self-contained in `sentinel.db`.
+ * - Robust ACID Guarantees: WAL (Write-Ahead Logging) mode allows simultaneous
+ *   concurrent readers without blocking, while writes execute in dedicated transactions.
+ * 
+ * Key Architectural Decisions:
+ * 1. Singleton Connection (`dbInstance`):
+ *    In Node.js/Next.js server environments, reusing a single connection pool avoids
+ *    hitting OS file descriptor limits and SQLite file-lock contentions.
+ * 2. Parameterized Queries (`db.prepare('... WHERE id = ?')`):
+ *    All user inputs are bound via parameters, completely neutralizing SQL injection.
+ * 3. Idempotent Schema Migrations:
+ *    Table creation uses `CREATE TABLE IF NOT EXISTS`, and column extensions use safe
+ *    `ALTER TABLE ... ADD COLUMN` try/catch blocks, ensuring zero downtime upgrades.
+ * ==============================================================================
+ */
 
 let dbInstance: Database.Database | null = null;
 
@@ -36,8 +60,10 @@ export function getDb(): Database.Database {
   const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'sentinel.db');
   const db = new Database(dbPath);
 
-  // Enable WAL mode for high performance and concurrency
+  // WAL (Write-Ahead Logging) mode enables high concurrency by allowing readers
+  // to proceed concurrently with writers without blocking.
   db.pragma('journal_mode = WAL');
+  // Enforce foreign key constraints to prevent orphan records.
   db.pragma('foreign_keys = ON');
 
   // Create tables with production schema
@@ -1092,4 +1118,140 @@ export function updateLoginChallengeOtp(challengeId: string, otpHash: string, ex
     WHERE id = ?
   `).run(otpHash, expiresAt, challengeId);
 }
+
+/**
+ * ==============================================================================
+ * NOTIFICATION SUBSYSTEM & PERSISTENCE
+ * ==============================================================================
+ */
+
+export function getNotifications(userId: string): Notification[] {
+  const db = getDb();
+  seedUserNotificationsIfEmpty(userId);
+  const rows = db.prepare(`
+    SELECT id, userId, type, title, message, read, actionUrl, createdAt
+    FROM notifications
+    WHERE userId = ?
+    ORDER BY createdAt DESC
+  `).all(userId) as Array<{
+    id: string;
+    userId: string;
+    type: any;
+    title: string;
+    message: string;
+    read: number;
+    actionUrl: string | null;
+    createdAt: string;
+  }>;
+
+  return rows.map((r) => ({
+    ...r,
+    read: Boolean(r.read),
+  }));
+}
+
+export function getUnreadNotificationCount(userId: string): number {
+  const db = getDb();
+  seedUserNotificationsIfEmpty(userId);
+  const row = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM notifications
+    WHERE userId = ? AND read = 0
+  `).get(userId) as { count: number } | undefined;
+  return row ? row.count : 0;
+}
+
+export function markAllNotificationsRead(userId: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE notifications
+    SET read = 1
+    WHERE userId = ? AND read = 0
+  `).run(userId);
+}
+
+export function markNotificationRead(id: string, userId: string): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE notifications
+    SET read = 1
+    WHERE id = ? AND userId = ?
+  `).run(id, userId);
+}
+
+export function createNotification(data: {
+  id?: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  actionUrl?: string | null;
+  read?: boolean | number;
+  createdAt?: string;
+}): void {
+  const db = getDb();
+  const notifId = data.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  db.prepare(`
+    INSERT INTO notifications (id, userId, type, title, message, read, actionUrl, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    notifId,
+    data.userId,
+    data.type,
+    data.title,
+    data.message,
+    data.read ? 1 : 0,
+    data.actionUrl || null,
+    data.createdAt || now()
+  );
+}
+
+export function seedUserNotificationsIfEmpty(userId: string): void {
+  const db = getDb();
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM notifications WHERE userId = ?').get(userId) as { count: number };
+  if (countRow && countRow.count > 0) return;
+
+  const initialItems = [
+    {
+      id: `notif-1-${userId.slice(0, 8)}`,
+      userId,
+      type: 'critical_finding',
+      title: 'Boundary Violation Identified (SNT-001)',
+      message: 'Filesystem MCP Sandbox attempted relative path traversal outside declared /workspace boundary.',
+      actionUrl: '/findings',
+      read: 0,
+      createdAt: now(),
+    },
+    {
+      id: `notif-2-${userId.slice(0, 8)}`,
+      userId,
+      type: 'approval_required',
+      title: 'Remediation Review Awaiting Action',
+      message: 'Human review required for change request APR-001 on Filesystem MCP boundary patch.',
+      actionUrl: '/approvals',
+      read: 0,
+      createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    },
+    {
+      id: `notif-3-${userId.slice(0, 8)}`,
+      userId,
+      type: 'scan_completed',
+      title: 'Automated Scan Completed (SCAN-003)',
+      message: 'Permission boundary retest completed: 6 of 6 security checks verified.',
+      actionUrl: '/scans',
+      read: 1,
+      createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    },
+  ];
+
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO notifications (id, userId, type, title, message, read, actionUrl, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const item of initialItems) {
+    stmt.run(item.id, item.userId, item.type, item.title, item.message, item.read, item.actionUrl, item.createdAt);
+  }
+}
+
 

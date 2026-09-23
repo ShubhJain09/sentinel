@@ -67,17 +67,21 @@ export async function POST(req: NextRequest) {
       mkdirSync(UPLOAD_DIR, { recursive: true });
     }
 
-    // Remove old avatar if exists
+    // Remove old avatar if exists (with strict directory containment check)
     const db = getDb();
     const user = db.prepare('SELECT avatarUrl FROM users WHERE id = ?').get(session.userId) as { avatarUrl?: string } | undefined;
     if (user?.avatarUrl && user.avatarUrl.startsWith('/uploads/avatars/')) {
-      const oldPath = path.join(process.cwd(), 'public', user.avatarUrl);
+      const sanitizedRel = path.basename(user.avatarUrl);
+      const oldPath = path.join(UPLOAD_DIR, sanitizedRel);
       try { unlinkSync(oldPath); } catch { /* file may not exist */ }
     }
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop() || 'jpg';
-    const safeExt = sanitizeFilename(ext);
+    // Derive trusted extension strictly from verified image magic bytes
+    let safeExt = 'jpg';
+    if (isPng) safeExt = 'png';
+    else if (isWebp) safeExt = 'webp';
+    else if (isGif) safeExt = 'gif';
+
     const filename = `${session.userId}-${generateId().substring(0, 8)}.${safeExt}`;
     const filepath = path.join(UPLOAD_DIR, filename);
 
@@ -112,11 +116,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Remove existing avatar file
+    // Remove existing avatar file (with strict directory containment check)
     const db = getDb();
     const user = db.prepare('SELECT avatarUrl FROM users WHERE id = ?').get(session.userId) as { avatarUrl?: string } | undefined;
     if (user?.avatarUrl && user.avatarUrl.startsWith('/uploads/avatars/')) {
-      const oldPath = path.join(process.cwd(), 'public', user.avatarUrl);
+      const sanitizedRel = path.basename(user.avatarUrl);
+      const oldPath = path.join(UPLOAD_DIR, sanitizedRel);
       try { unlinkSync(oldPath); } catch { /* file may not exist */ }
     }
 

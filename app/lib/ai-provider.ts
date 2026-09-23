@@ -312,7 +312,29 @@ class SentinelSandboxEngine implements AiProvider {
   }
 }
 
-// ── Registry ─────────────────────────────────────────────────────────────────
+/**
+ * ==============================================================================
+ * SENTINEL — AI & SECURITY PROVIDER REGISTRY
+ * ==============================================================================
+ * 
+ * Architectural Philosophy:
+ * 1. Interface Decoupling:
+ *    The rest of the Sentinel application interacts exclusively with the `AiProvider`
+ *    interface (`analyzeFinding`, `proposeRemediation`, `runSecurityInspection`).
+ *    This allows switching inference engines or agent platforms without altering
+ *    UI components or server actions.
+ * 
+ * 2. Zero-Dependency Deterministic Fallback:
+ *    When developers clone Sentinel, they don't need third-party API keys to test
+ *    security inspections or remediation workflows. The `SentinelSandboxEngine` provides
+ *    deterministic, reproducible security simulations out of the box.
+ * 
+ * 3. Dynamic Elevation:
+ *    When an external provider (such as TrueForge or Groq) is configured via environment
+ *    variables, `getActiveProvider()` automatically routes real-time security telemetry
+ *    through the live engine.
+ * ==============================================================================
+ */
 const providers: AiProvider[] = [
   new SentinelSandboxEngine(),
   new TrueForgeProvider(),
@@ -329,7 +351,8 @@ export function getProviderById(id: string): AiProvider {
 }
 
 export function getActiveProvider(): AiProvider {
-  // If external provider configured, prefer it, otherwise return built-in sandbox engine
+  // If an external high-performance provider is configured, elevate to it;
+  // otherwise gracefully fall back to the built-in deterministic sandbox engine.
   const configured = providers.find(p => p.id !== 'sentinel-sandbox' && p.isConfigured);
   return configured || providers[0];
 }

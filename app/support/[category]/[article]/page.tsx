@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { GlobalNav } from '@/app/components/global-nav';
 import { PublicFooter } from '@/app/components/public-footer';
 import { Icon } from '@/app/components/ui-icon';
+import { getSession } from '@/app/lib/auth';
 import {
   getCategoryById,
   getArticle,
@@ -30,6 +31,7 @@ export default async function SupportArticlePage({
   params: Promise<{ category: string; article: string }>;
 }) {
   const { category: catId, article: slug } = await params;
+  const session = await getSession();
 
   const category = getCategoryById(catId);
   const article = getArticle(catId, slug);
@@ -44,7 +46,7 @@ export default async function SupportArticlePage({
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-blue)] selection:text-white">
-      <GlobalNav />
+      <GlobalNav session={session} />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-12 sm:py-16 space-y-10 select-none pb-32">
         {/* ── Breadcrumb ──────────────────────────────────────────────────── */}

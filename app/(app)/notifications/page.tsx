@@ -1,5 +1,6 @@
 import { getSession } from "@/app/lib/auth";
 import { redirect } from "next/navigation";
+import { getNotifications, seedUserNotificationsIfEmpty } from "@/app/lib/db";
 import NotificationsContent from "./notifications-content";
 import type { Metadata } from "next";
 
@@ -14,5 +15,8 @@ export default async function NotificationsPage() {
     redirect("/login");
   }
 
-  return <NotificationsContent />;
+  seedUserNotificationsIfEmpty(session.userId);
+  const notifications = getNotifications(session.userId);
+
+  return <NotificationsContent initialNotifications={notifications} />;
 }

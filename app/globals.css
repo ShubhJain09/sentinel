@@ -698,6 +698,129 @@ body {
   border-radius: 24px;
 }
 
+/* ─── Apple / visionOS Floating Liquid Glass Panel ─────────────────────────── */
+
+.floating-glass-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="dark"] .floating-glass-backdrop {
+  background: rgba(0, 0, 0, 0.52);
+}
+
+.floating-glass-backdrop-enter {
+  animation: backdropFadeIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.floating-glass-backdrop-exit {
+  animation: backdropFadeOut 0.20s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes backdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdropFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.floating-glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(32px) saturate(190%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 24px 64px -12px rgba(0, 0, 0, 0.16),
+    0 8px 24px -4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  border-radius: 26px;
+  will-change: transform, opacity;
+}
+
+[data-theme="dark"] .floating-glass-panel {
+  background: rgba(22, 23, 29, 0.84);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 28px 72px -12px rgba(0, 0, 0, 0.75),
+    0 8px 28px -4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 26px;
+}
+
+.floating-glass-panel-enter {
+  animation: floatingGlassEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.floating-glass-panel-exit {
+  animation: floatingGlassExit 0.20s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes floatingGlassEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(16px, -4px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes floatingGlassExit {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(12px, -2px, 0) scale(0.96);
+  }
+}
+
+.floating-glass-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 140, 145, 0.35) transparent;
+}
+
+.floating-glass-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.floating-glass-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.floating-glass-scroll::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 145, 0.35);
+  border-radius: 9999px;
+}
+
+.floating-glass-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 145, 0.6);
+}
+
+
 .hero-headline {
   font-size: clamp(48px, 5.5vw, 68px);
   font-weight: 700;

@@ -52,7 +52,21 @@ export async function saveAiConversationAction(conv: {
     return { success: false, error: 'Title is required' };
   }
 
+  // Prevent excessive payload exhaustion
+  if (Array.isArray(conv.messages) && conv.messages.length > 500) {
+    return { success: false, error: 'Conversation exceeds maximum allowed messages (500)' };
+  }
+
   try {
+    // If updating an existing conversation, verify ownership
+    if (conv.id) {
+      const db = getDb();
+      const existing = db.prepare('SELECT userId FROM ai_conversations WHERE id = ?').get(conv.id) as { userId: string } | undefined;
+      if (existing && existing.userId !== session.userId) {
+        return { success: false, error: 'Unauthorized to modify this conversation' };
+      }
+    }
+
     const saved = saveAiConversation({
       id: conv.id,
       userId: session.userId,

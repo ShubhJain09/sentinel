@@ -1,58 +1,87 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '@/app/components/ui-icon';
 import { triggerHaptic } from '@/app/lib/haptics';
 import Link from 'next/link';
+import { markAllNotificationsReadAction, markNotificationReadAction } from '@/app/actions/notifications';
+import type { Notification } from '@/app/lib/types';
 
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  time: string;
-  read: boolean;
-  actionUrl?: string;
+interface NotificationsContentProps {
+  initialNotifications?: Notification[];
 }
 
-export default function NotificationsContent() {
-  const [filter, setFilter] = useState('All');
+function formatRelativeTime(dateString: string): string {
+  try {
+    const diffMs = Date.now() - new Date(dateString).getTime();
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hr ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch {
+    return 'Recent';
+  }
+}
 
-  const [items, setItems] = useState<NotificationItem[]>([
-    {
-      id: 'notif-1',
-      title: 'Boundary Violation Identified (SNT-001)',
-      message: 'Filesystem MCP Sandbox attempted relative path traversal outside declared /workspace boundary.',
-      type: 'critical',
-      time: 'Just now',
-      read: false,
-      actionUrl: '/findings',
-    },
-    {
-      id: 'notif-2',
-      title: 'Remediation Review Awaiting Action',
-      message: 'Human review required for change request APR-001 on Filesystem MCP boundary patch.',
-      type: 'warning',
-      time: '12 min ago',
-      read: false,
-      actionUrl: '/approvals',
-    },
-    {
-      id: 'notif-3',
-      title: 'Automated Scan Completed (SCAN-003)',
-      message: 'Permission boundary retest completed: 6 of 6 security checks verified.',
-      type: 'info',
-      time: '1 hr ago',
-      read: true,
-      actionUrl: '/scans',
-    },
-  ]);
+export default function NotificationsContent({
+  initialNotifications = [],
+}: NotificationsContentProps) {
+  const [filter, setFilter] = useState<'All' | 'Unread'>('All');
+  const [items, setItems] = useState<Notification[]>(initialNotifications);
 
+  // Sync if initialNotifications changes
+  useEffect(() => {
+    if (initialNotifications.length > 0) {
+      setItems(initialNotifications);
+    }
+  }, [initialNotifications]);
+
+  const unreadCount = items.filter((i) => !i.read).length;
   const filteredItems = items.filter((item) => (filter === 'Unread' ? !item.read : true));
 
-  function markAllRead() {
+  async function markAllRead() {
     triggerHaptic('tap');
     setItems((prev) => prev.map((item) => ({ ...item, read: true })));
+
+    // Emit event immediately to clear header red dot
+    window.dispatchEvent(
+      new CustomEvent('sentinel:notifications-updated', {
+        detail: { unreadCount: 0 },
+      })
+    );
+
+    try {
+      await markAllNotificationsReadAction();
+    } catch {
+      // Fallback API call
+      try {
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'markAllRead' }),
+        });
+      } catch {}
+    }
+  }
+
+  async function handleItemClick(item: Notification) {
+    if (!item.read) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, read: true } : i))
+      );
+      const remainingUnread = Math.max(0, unreadCount - 1);
+      window.dispatchEvent(
+        new CustomEvent('sentinel:notifications-updated', {
+          detail: { unreadCount: remainingUnread },
+        })
+      );
+      try {
+        await markNotificationReadAction(item.id);
+      } catch {}
+    }
   }
 
   return (
@@ -71,7 +100,10 @@ export default function NotificationsContent() {
         </div>
         <button
           onClick={markAllRead}
-          className="btn-ghost text-[12px] self-start sm:self-auto"
+          disabled={unreadCount === 0}
+          className={`btn-ghost text-[12px] self-start sm:self-auto ${
+            unreadCount === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          }`}
         >
           Mark all as read
         </button>
@@ -81,8 +113,8 @@ export default function NotificationsContent() {
         {/* Filter bar */}
         <div className="flex gap-1.5 p-3.5 border-b border-[var(--border-hairline)] bg-[var(--surface-solid)]">
           <div className="segmented-control">
-            {['All', 'Unread'].map((f) => {
-              const count = f === 'Unread' ? items.filter((i) => !i.read).length : items.length;
+            {(['All', 'Unread'] as const).map((f) => {
+              const count = f === 'Unread' ? unreadCount : items.length;
               return (
                 <button
                   key={f}
@@ -113,18 +145,18 @@ export default function NotificationsContent() {
               >
                 <div
                   className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center shrink-0 mt-0.5 border ${
-                    item.type === 'critical'
+                    item.type.includes('critical')
                       ? 'bg-[var(--status-critical-subtle)] text-[var(--status-critical)] border-[var(--status-critical-border)]'
-                      : item.type === 'warning'
+                      : item.type.includes('warning') || item.type.includes('approval')
                       ? 'bg-[var(--status-warning-subtle)] text-[var(--status-warning)] border-[var(--status-warning-border)]'
                       : 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] border-[var(--accent-blue-border)]'
                   }`}
                 >
                   <Icon
                     name={
-                      item.type === 'critical'
+                      item.type.includes('critical') || item.type.includes('finding')
                         ? 'finding'
-                        : item.type === 'warning'
+                        : item.type.includes('warning') || item.type.includes('approval')
                         ? 'approval'
                         : 'check'
                     }
@@ -143,7 +175,7 @@ export default function NotificationsContent() {
                       </h3>
                     </div>
                     <span className="text-[11px] font-mono text-[var(--text-tertiary)] tabular-numbers">
-                      {item.time}
+                      {formatRelativeTime(item.createdAt)}
                     </span>
                   </div>
                   <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
@@ -153,7 +185,10 @@ export default function NotificationsContent() {
                     <div className="pt-1">
                       <Link
                         href={item.actionUrl}
-                        onClick={() => triggerHaptic('selection')}
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          handleItemClick(item);
+                        }}
                         className="text-[12px] font-medium text-[var(--accent-blue)] hover:underline inline-flex items-center gap-1 active:scale-[0.98]"
                       >
                         Take action &rarr;

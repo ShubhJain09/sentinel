@@ -3,6 +3,7 @@
 import { getSession } from '@/app/lib/auth';
 import { getDb, generateId, now } from '@/app/lib/db';
 import { getActiveProvider } from '@/app/lib/ai-provider';
+import { hasPermission } from '@/app/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -10,6 +11,10 @@ export async function runNewScan(formData: FormData) {
   const session = await getSession();
   if (!session) {
     throw new Error('Unauthorized');
+  }
+
+  if (!hasPermission(session.role, 'scan.create')) {
+    throw new Error('Permission denied: scan.create capability required');
   }
 
   const target = (formData.get('target') as string) || 'Filesystem MCP Sandbox';

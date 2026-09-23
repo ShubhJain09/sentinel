@@ -37,14 +37,19 @@ export async function createSession(user: Session): Promise<{ token: string; exp
   try {
     const cookieStore = await cookies();
     cookieStore.set('sentinel-session', session, {
+      // 1. httpOnly: true prevents malicious scripts from reading the cookie via `document.cookie`,
+      //    effectively blocking token theft in the event of an XSS vulnerability.
       httpOnly: true,
+      // 2. secure: ensures the cookie is transmitted only over encrypted HTTPS connections in production.
       secure: process.env.NODE_ENV === 'production' && !process.env.APP_URL?.startsWith('http://localhost'),
+      // 3. sameSite: 'lax' defends against Cross-Site Request Forgery (CSRF) while still allowing
+      //    authenticated top-level navigation from external email links or OAuth redirects.
       sameSite: 'lax',
       path: '/',
       expires: expiresAt,
     });
   } catch (e) {
-    // If called in a context where cookies() cannot be directly mutated
+    // If called in a context where cookies() cannot be directly mutated (e.g. Server Component render)
   }
 
   return { token: session, expiresAt };
@@ -65,7 +70,11 @@ export async function getSession(): Promise<Session | null> {
 
     const userSession = payload as unknown as Session;
 
-    // Cross-check live user state in database
+    // Cross-check live user state in database:
+    // Architectural Decision: Rather than blindly trusting the role and active state
+    // encoded in the 7-day JWT, Sentinel queries the live SQLite record on every server request.
+    // This guarantees that if a user is promoted, demoted, suspended, or terminated, the change
+    // takes effect instantly without waiting for token expiration.
     const { getUserById } = await import('@/app/lib/db');
     const dbUser = getUserById(userSession.userId);
     if (!dbUser || !dbUser.isActive) {

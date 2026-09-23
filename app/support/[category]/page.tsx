@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { GlobalNav } from '@/app/components/global-nav';
 import { PublicFooter } from '@/app/components/public-footer';
 import { Icon } from '@/app/components/ui-icon';
+import { getSession } from '@/app/lib/auth';
 import {
   SUPPORT_CATEGORIES,
   getCategoryById,
@@ -30,6 +31,7 @@ export default async function SupportCategoryPage({
   params: Promise<{ category: string }>;
 }) {
   const { category: rawCategory } = await params;
+  const session = await getSession();
 
   // Normalization for common aliases
   const categoryId =
@@ -55,7 +57,7 @@ export default async function SupportCategoryPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-blue)] selection:text-white">
-      <GlobalNav />
+      <GlobalNav session={session} />
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-6 py-12 sm:py-16 space-y-12 select-none pb-32">
         {/* ── Breadcrumb ──────────────────────────────────────────────────── */}

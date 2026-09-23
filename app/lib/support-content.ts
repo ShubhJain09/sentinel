@@ -708,6 +708,322 @@ If an automated security scan returns an error:
 3. Inspect the audit log in **Activity** for raw container exit codes.
     `,
   },
+
+  // 12. Integrations
+  {
+    slug: 'trueforge-ai-gateway',
+    categoryId: 'integrations',
+    title: 'Connecting TrueForge AI Gateway & Multi-Model Routing',
+    summary: 'How Sentinel connects to TrueForge AI Gateway for high-throughput model dispatch, fallback failovers, and latency monitoring.',
+    readTime: '4 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['trueforge', 'ai gateway', 'provider routing', 'fallback', 'llm proxy', 'latency'],
+    content: `
+# TrueForge AI Gateway Integration
+
+Sentinel integrates natively with **TrueForge AI Gateway** to route autonomous agent prompts and tool executions across heterogeneous large language model backends.
+
+## Architectural Role of TrueForge
+Rather than coupling autonomous agents directly to individual provider APIs, Sentinel routes intelligence requests through TrueForge:
+1. **Multi-Provider Failover**: Automatically cascades from primary providers (OpenAI, Anthropic) to secondary fallbacks (Groq, Gemini, Ollama) if rate limits or 5xx errors occur.
+2. **Deterministic Sandbox Mode**: When external providers are offline, Sentinel's built-in sandbox engine provides deterministic, zero-dependency policy analysis.
+3. **Latency & Token Governance**: Tracks per-call input/output token counts, execution duration, and p95 latency directly in SQLite audit logs.
+
+## Configuring TrueForge Gateway
+To connect TrueForge, set the following environment variables in your deployment:
+
+\`\`\`bash
+# TrueForge Gateway Base URL
+AI_GATEWAY_URL="https://gateway.trueforge.ai/v1"
+
+# TrueForge Gateway Bearer Secret
+AI_GATEWAY_KEY="tf_sec_live_example"
+
+# Default Model Dispatch
+DEFAULT_AI_MODEL="claude-3-5-sonnet-20241022"
+\`\`\`
+
+## Health & Status Monitoring
+Navigate to **Integrations** in the primary navigation to inspect connection uptime, recent token usage, and roundtrip telemetry for connected model endpoints.
+    `,
+  },
+  {
+    slug: 'mcp-security-containment',
+    categoryId: 'integrations',
+    title: 'Model Context Protocol (MCP) Tool Containment & Boundary Enclaves',
+    summary: 'Learn how Sentinel intercepts and sandboxes Model Context Protocol tool execution over stdio and SSE transports.',
+    readTime: '5 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['mcp', 'model context protocol', 'stdio', 'sse', 'containment', 'sandbox', 'tool boundaries'],
+    content: `
+# Model Context Protocol (MCP) Security Containment
+
+The **Model Context Protocol (MCP)** provides open standardization for AI models to interact with local tools, filesystems, and databases. Sentinel wraps MCP servers in strict runtime containment enclaves.
+
+## Threat Model for MCP Servers
+Because MCP servers execute arbitrary code and system commands on behalf of an LLM, rogue instructions or prompt injections can weaponize tools:
+- **Filesystem Traversal**: An agent attempting to access sensitive host paths outside its assigned workspace (e.g. \`../../etc/passwd\`).
+- **Command Injection**: Appending unescaped shell commands into parameter inputs.
+- **Unauthorized Tool Escalation**: Invoking tools not declared in the approved **Agent Passport**.
+
+## Sentinel's Containment Envelopes
+1. **Transport Interception**: Sentinel proxies stdio and SSE MCP transports, inspecting JSON-RPC payloads before dispatching to tool binaries.
+2. **Canonical Workspace Boundary**: All file operations are checked with path resolution. Any path resolving outside the declared \`/workspace\` root triggers an immediate **SNT-001** Boundary Violation finding.
+3. **Tamper-Evident Evidence Vault**: Tool arguments, environment state, and stdout/stderr are hashed and stored in the immutable evidence ledger.
+    `,
+  },
+  {
+    slug: 'ai-model-provider-config',
+    categoryId: 'integrations',
+    title: 'Configuring AI Model Providers & Local Inference Endpoints',
+    summary: 'A comprehensive setup guide for OpenAI, Anthropic Claude, Google Gemini, Groq, and local Ollama inference in Sentinel.',
+    readTime: '4 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['model providers', 'openai', 'anthropic', 'gemini', 'groq', 'ollama', 'local ai'],
+    content: `
+# Configuring AI Model Providers
+
+Sentinel includes an extensible multi-provider abstraction layer (\`ai-provider.ts\`) that supports commercial cloud providers alongside private on-premises inference endpoints.
+
+## Supported Providers
+Sentinel automatically activates providers based on available environment credentials:
+
+- **Anthropic Claude**: \`ANTHROPIC_API_KEY\` (Recommended for deep AST analysis and code patches).
+- **OpenAI**: \`OPENAI_API_KEY\` (GPT-4o, GPT-4o-mini).
+- **Google Gemini**: \`GEMINI_API_KEY\` (Gemini 1.5 Pro, Flash).
+- **Groq**: \`GROQ_API_KEY\` (Ultra-low latency inference for real-time investigation replay).
+- **Local Ollama**: \`OLLAMA_BASE_URL\` (e.g. \`http://localhost:11434\` for air-gapped on-premise deployments).
+
+## Zero-Dependency Sandbox Fallback
+If no external provider keys are configured, Sentinel runs seamlessly using its built-in **SentinelSandboxEngine**. This deterministic engine performs comprehensive rule-based boundary checks, CVE mapping, and AST validations without external API dependencies.
+    `,
+  },
+  {
+    slug: 'external-webhook-integrations',
+    categoryId: 'integrations',
+    title: 'Security Event Webhooks, SIEM Ingestion & Incident Alerting',
+    summary: 'Stream real-time Sentinel boundary violations, scan verdicts, and approval alerts to external enterprise SIEM systems.',
+    readTime: '3 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['webhooks', 'siem', 'incident alerts', 'slack', 'pagerduty', 'security events'],
+    content: `
+# Security Event Webhooks & SIEM Ingestion
+
+Enterprise security teams can pipe Sentinel alerts into centralized Security Information and Event Management (SIEM) systems such as Splunk, Datadog, or Slack incident channels.
+
+## Event Dispatch Types
+Sentinel triggers automated webhooks upon the following events:
+- **Critical Boundary Violations**: Immediate alert when an agent attempts unauthorized filesystem escape.
+- **Pending Human Approvals**: Notification dispatched when high-blast-radius remediation code requires sign-off.
+- **Scan Verdicts**: Summary reports delivered upon completion of automated AST security scans.
+
+## Cryptographic Payload Signatures
+Webhook dispatches include an \`X-Sentinel-Signature\` HTTP header containing an HMAC-SHA256 signature generated with your workspace webhook secret. Receivers verify this signature to guarantee authenticity and prevent spoofed alerts.
+    `,
+  },
+
+  // 13. Notifications
+  {
+    slug: 'configuring-alert-rules',
+    categoryId: 'notifications',
+    title: 'Configuring Security Alert Rules, Severity Thresholds & Triage',
+    summary: 'Set up real-time notification routing for critical boundary violations, drift detection, and automated scan verdicts.',
+    readTime: '3 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['alert rules', 'severity', 'critical', 'warning', 'triage', 'notifications'],
+    content: `
+# Configuring Security Alert Rules
+
+Sentinel provides high-signal notification management designed to keep security teams informed without alert fatigue.
+
+## Alert Severity Tiers
+1. **Critical (Red)**: High-risk events requiring immediate containment, such as prompt injection bypasses or unauthorized filesystem traversal attempts.
+2. **Warning (Amber)**: Operational anomalies such as agent configuration drift or pending human approval gates awaiting review.
+3. **Info (Blue)**: Routine operational confirmations, including successful automated scan completions and baseline retest passes.
+
+## Managing Unread State
+- When new alerts are logged, a high-visibility badge indicator appears on the global notification bell.
+- Clicking **Mark all as read** on the **Security Notifications** page immediately synchronizes your account status in SQLite, dismissing the header badge across all open sessions.
+    `,
+  },
+  {
+    slug: 'managing-approval-notifications',
+    categoryId: 'notifications',
+    title: 'Actionable Notifications: Triaging Approvals & Remediation Requests',
+    summary: 'How security operators receive, review, and act on pending remediation requests directly from notification streams.',
+    readTime: '3 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['actionable notifications', 'approvals', 'remediation review', 'workflow', 'one-click'],
+    content: `
+# Actionable Notifications & Approval Triage
+
+Sentinel notifications are fully interactive and actionable, enabling operators to move from alert to resolution in seconds.
+
+## One-Click Triage Workflow
+Every notification item includes deep-link references to the underlying platform surface:
+- Clicking **Take action &rarr;** on a boundary check takes you directly to the **Findings** forensic workbench.
+- Clicking an approval alert routes directly to the **Approvals Gate**, where side-by-side AST code diffs can be evaluated.
+- Reviewing an item automatically marks that specific alert as resolved while preserving historical audit logs.
+    `,
+  },
+
+  // 14. Security & Privacy
+  {
+    slug: 'authorized-testing-boundary',
+    categoryId: 'security',
+    title: 'Authorized Testing Boundaries & MicroVM Enclave Isolation',
+    summary: 'Deep dive into Sentinel defense-in-depth isolation model, gVisor MicroVM envelopes, and read-only host mounts.',
+    readTime: '6 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['authorized boundary', 'sandbox', 'microvm', 'gvisor', 'isolation', 'defense in depth'],
+    content: `
+# Authorized Testing Boundaries & MicroVM Isolation
+
+Sentinel operates under the core principle of **Guaranteed Containment**: autonomous AI agents are never granted untrusted execution access to bare-metal host operating systems.
+
+## Isolation Architecture
+1. **MicroVM Sandboxes**: Each agent tool handler executes inside an ephemeral MicroVM envelope powered by gVisor user-space kernels.
+2. **Read-Only System Mounts**: Root operating system directories (\`/etc\`, \`/bin\`, \`/usr\`) are mounted strictly read-only with \`noexec\` flags.
+3. **Restricted Ephemeral Workspaces**: Tool file generation and data scraping are restricted to temporary sandbox paths that are wiped after scan completion.
+4. **Syscall Interception**: Any process attempting low-level socket creation, ptrace inspection, or unauthorized process spawning is aborted by the kernel monitor.
+    `,
+  },
+  {
+    slug: 'rbac-role-hierarchy',
+    categoryId: 'security',
+    title: '3-Tier Role-Based Access Control: OWNER, ADMIN, and USER',
+    summary: 'Understanding the authorization matrix, permission boundaries, and immutable protection invariants for Sentinel accounts.',
+    readTime: '5 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['rbac', 'roles', 'owner', 'admin', 'user', 'permissions', 'least privilege'],
+    content: `
+# 3-Tier Role-Based Access Control (RBAC)
+
+Sentinel implements a rigorous 3-tier hierarchical permission model (\`OWNER\` > \`ADMIN\` > \`USER\`) to ensure the principle of least privilege across enterprise teams.
+
+## Role Capabilities & Hierarchy
+
+### 1. OWNER (Super Administrator)
+- The highest authority in the platform tenant.
+- Has unrestricted access to the entire **Admin Centre** and all configuration consoles.
+- Can promote regular \`USER\` accounts to \`ADMIN\`.
+- Can demote \`ADMIN\` accounts back to \`USER\`.
+- Can suspend or terminate both \`USER\` and \`ADMIN\` accounts.
+- **Immutable Protection Invariant**: The \`OWNER\` account can never be demoted, suspended, or terminated by any other user or admin.
+
+### 2. ADMIN (Operations Administrator)
+- Has full access to the **Admin Centre** and platform telemetry.
+- Can manage normal \`USER\` accounts (provisioning, reviewing, suspending).
+- Can execute security scans, trigger remediation, and inspect audit logs.
+- **Privilege Boundary**: An \`ADMIN\` cannot demote or terminate the \`OWNER\`, nor can they modify another \`ADMIN\`'s role.
+
+### 3. USER (Operator / Developer)
+- Access to the security dashboard, findings explorer, scans, and AI assistant.
+- Can submit remediation requests and review assigned agent targets.
+- Cannot access the **Admin Centre** or manage user permissions.
+    `,
+  },
+  {
+    slug: 'human-in-the-loop-approvals',
+    categoryId: 'security',
+    title: 'Human-in-the-Loop Governance & Mandatory Approval Gates',
+    summary: 'How Sentinel prevents rogue agent actions by requiring cryptographic human sign-off on sensitive operations.',
+    readTime: '4 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['human in the loop', 'hitl', 'approvals', 'governance', 'blast radius', 'signing'],
+    content: `
+# Human-in-the-Loop Governance
+
+Autonomous agents should never have unilateral authority to modify production codebases or firewall rules without human oversight. Sentinel enforces strict **Approval Gates**.
+
+## Mandatory Approval Policies
+Operations requiring mandatory human sign-off:
+- Applying automated AST patches to agent tool handlers.
+- Modifying declared resource permissions in an active **Agent Passport**.
+- Deleting security findings or changing baseline risk tolerances.
+
+## Blast Radius Previews
+Before approving an action, operators are presented with a calculated **Blast Radius Assessment**:
+- Number of affected agents and downstream microservices.
+- Visual side-by-side AST code diffs highlighting exact additions and deletions.
+- Estimated rollback complexity.
+    `,
+  },
+  {
+    slug: 'data-privacy-dob-policy',
+    categoryId: 'security',
+    title: 'Operator Privacy, DOB Protection & Tamper-Evident Audit Logs',
+    summary: 'How Sentinel protects sensitive operator information, enforces 18+ age verification privately, and secures session tokens.',
+    readTime: '4 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['privacy', 'dob', 'date of birth', 'jwt', 'bcrypt', 'audit logs', 'wal'],
+    content: `
+# Operator Privacy & Data Protection
+
+Sentinel is built from the ground up with defense-in-depth data privacy and cryptographic credential protection.
+
+## Session Security & Cookie Protection
+- Authentication tokens are signed with HMAC-SHA256 using server-only secrets.
+- Cookies are issued with \`HttpOnly\`, \`SameSite=Lax\`, and \`Secure\` attributes, making them completely immune to client-side XSS token theft.
+
+## Private Age Verification (DOB)
+- Operator Date of Birth is collected solely to satisfy legal 18+ regulatory compliance for autonomous system operation.
+- Raw birthdates are strictly confined to administrative security verification and are never exposed publicly, displayed on public profile cards, or included in client search responses.
+
+## Tamper-Evident SQLite WAL Audit Logs
+All security actions—including login attempts, scans, role promotions, and patch executions—are recorded in SQLite Write-Ahead Logging (WAL) audit journals with microsecond timestamps and operator cryptographic fingerprints.
+    `,
+  },
+
+  // 15. Owner & Admin
+  {
+    slug: 'tenant-workspace-management',
+    categoryId: 'owner',
+    title: 'Tenant Workspace Administration, Fleet Quotas & Isolation Domains',
+    summary: 'Platform Owner guide to managing multi-tenant workspaces, agent quotas, default policies, and security baselines.',
+    readTime: '5 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['workspace', 'tenant', 'fleet quotas', 'isolation', 'owner guide'],
+    content: `
+# Tenant Workspace Administration
+
+As a Sentinel **Platform Owner**, you have full control over organization workspaces, isolation policies, and global agent fleet configurations.
+
+## Workspace Isolation Domains
+Every workspace in Sentinel acts as a hard security boundary:
+- Agents, scans, findings, and evidence vaults are strictly segmented by \`workspaceId\`.
+- Cross-tenant data leakage is prevented through foreign-key schema constraints and automated server-action authorization checks.
+
+## Fleet Governance & Quotas
+Platform Owners can configure:
+- Maximum concurrent agent scanning tasks.
+- Storage limits for raw tool telemetry and forensic investigation replays.
+- Default security postures (Strict MicroVM containment vs. Permissive Shadow Mode).
+    `,
+  },
+  {
+    slug: 'admin-governance-audit',
+    categoryId: 'owner',
+    title: 'Admin Governance, Operator Delegation & Privileged Audit Logging',
+    summary: 'How Platform Owners promote operators to Admins, enforce least-privilege delegation, and review privileged activity.',
+    readTime: '4 min read',
+    lastUpdated: 'September 2026',
+    keywords: ['admin governance', 'delegation', 'promotion', 'demotion', 'audit logs', 'privilege'],
+    content: `
+# Admin Governance & Privileged Audit Logging
+
+Platform Owners maintain exclusive authority over administrative delegation and governance auditing within Sentinel.
+
+## Promoting & Demoting Administrators
+1. Navigate to the **Admin Centre** (\`/owner\` or \`/admin\`).
+2. In the **Operators & Roles** directory, locate the target user.
+3. Select **Promote to Admin** to grant administrative privileges.
+4. If an administrator role is no longer needed, select **Demote to User** to instantly revoke Admin Centre access.
+
+## Reviewing Privileged Audit Logs
+Every privileged event—including role changes, account suspensions, and policy overrides—generates an immutable audit log entry in the system ledger. The Platform Owner can filter and inspect these events at any time to verify compliance with corporate security standards.
+    `,
+  },
 ];
 
 export const GLOSSARY_TERMS: GlossaryItem[] = [

@@ -63,6 +63,10 @@ export async function executeAndRetestRemediation(approvalId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
+  if (!hasPermission(session.role, 'remediation.manage')) {
+    throw new Error('Permission denied: remediation.manage capability required');
+  }
+
   const db = getDb();
   const timestamp = now();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { SentinelLogo } from '@/app/components/sentinel-logo';
@@ -14,16 +14,38 @@ interface GlobalNavProps {
   session?: Session | null;
 }
 
-export function GlobalNav({ session }: GlobalNavProps) {
+// In-memory module cache to eliminate session flicker during client-side navigation
+let globalCachedSession: Session | null | undefined = undefined;
+
+export function GlobalNav({ session: propSession }: GlobalNavProps) {
   const pathname = usePathname() || '';
   const router = useRouter();
   const { resolvedTheme, toggleTheme } = useTheme();
+
+  // Centralized session state: resolves from prop, module cache, or /api/auth/me fallback
+  const [session, setSession] = useState<Session | null>(() => {
+    if (propSession !== undefined) {
+      globalCachedSession = propSession;
+      return propSession;
+    }
+    return globalCachedSession !== undefined ? globalCachedSession : null;
+  });
+
+  const [sessionLoading, setSessionLoading] = useState<boolean>(() => {
+    if (propSession !== undefined) return false;
+    return globalCachedSession === undefined;
+  });
+
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [notifList, setNotifList] = useState<any[]>([]);
 
   const [activeMenu, setActiveMenu] = useState<'security' | 'ai' | 'resources' | 'admin' | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navDrawerClosing, setNavDrawerClosing] = useState(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -33,12 +55,41 @@ export function GlobalNav({ session }: GlobalNavProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Smooth exit transition handler for Quick Navigation floating panel
+  const closeNavDrawer = useCallback(() => {
+    if (navDrawerClosing) return;
+    setNavDrawerClosing(true);
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    closeTimeoutRef.current = setTimeout(() => {
+      setMobileNavOpen(false);
+      setNavDrawerClosing(false);
+    }, 200);
+  }, [navDrawerClosing]);
+
+  const toggleNavDrawer = useCallback(() => {
+    if (mobileNavOpen) {
+      closeNavDrawer();
+    } else {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+      setNavDrawerClosing(false);
+      setMobileNavOpen(true);
+    }
+  }, [mobileNavOpen, closeNavDrawer]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
+
   // Close menus on route change
   useEffect(() => {
     setActiveMenu(null);
     setProfileOpen(false);
     setNotifOpen(false);
     setMobileNavOpen(false);
+    setNavDrawerClosing(false);
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
   }, [pathname]);
 
   // Handle outside click
@@ -57,6 +108,89 @@ export function GlobalNav({ session }: GlobalNavProps) {
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
+
+  // Resolve session client-side if not supplied as a prop
+  useEffect(() => {
+    if (propSession !== undefined) {
+      setSession(propSession);
+      globalCachedSession = propSession;
+      setSessionLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted) return;
+        if (data && data.authenticated && data.session) {
+          setSession(data.session);
+          globalCachedSession = data.session;
+        } else {
+          setSession(null);
+          globalCachedSession = null;
+        }
+        setSessionLoading(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setSessionLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [propSession]);
+
+  // Fetch notifications and unread count from API, listening for updates
+  const fetchNotificationStatus = useCallback(() => {
+    if (!session) {
+      setUnreadCount(0);
+      setNotifList([]);
+      return;
+    }
+
+    fetch('/api/notifications')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.unreadCount === 'number') {
+          setUnreadCount(data.unreadCount);
+          if (Array.isArray(data.notifications)) {
+            setNotifList(data.notifications);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [session]);
+
+  useEffect(() => {
+    fetchNotificationStatus();
+
+    const handleNotificationsUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ unreadCount?: number }>;
+      if (customEvent.detail && typeof customEvent.detail.unreadCount === 'number') {
+        setUnreadCount(customEvent.detail.unreadCount);
+      }
+      fetchNotificationStatus();
+    };
+
+    window.addEventListener('sentinel:notifications-updated', handleNotificationsUpdated);
+    return () => {
+      window.removeEventListener('sentinel:notifications-updated', handleNotificationsUpdated);
+    };
+  }, [fetchNotificationStatus]);
+
+  // Prevent body scroll when navigation drawer is open
+  useEffect(() => {
+    if (mobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileNavOpen]);
 
   const handleMouseEnter = (menu: 'security' | 'ai' | 'resources' | 'admin') => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -125,7 +259,9 @@ export function GlobalNav({ session }: GlobalNavProps) {
         setActiveMenu(null);
         setProfileOpen(false);
         setNotifOpen(false);
-        setMobileNavOpen(false);
+        if (mobileNavOpen) {
+          closeNavDrawer();
+        }
       } else if (cmdOpen) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
@@ -143,7 +279,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [cmdOpen, filteredCommands, selectedIndex, router]);
+  }, [cmdOpen, filteredCommands, selectedIndex, router, closeNavDrawer, mobileNavOpen]);
 
   useEffect(() => {
     if (cmdOpen) {
@@ -489,7 +625,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
                         </Link>
                       </li>
                       <li>
-                        <Link href="/support/scans" className="flex items-center gap-2.5 text-[var(--text-primary)] hover:text-[var(--accent-blue)] transition-colors font-medium">
+                        <Link href="/scans" className="flex items-center gap-2.5 text-[var(--text-primary)] hover:text-[var(--accent-blue)] transition-colors font-medium">
                           <Icon name="scan" size={14} className="text-[var(--text-tertiary)]" />
                           <span>Scan Documentation</span>
                         </Link>
@@ -663,19 +799,19 @@ export function GlobalNav({ session }: GlobalNavProps) {
               {resolvedTheme === 'dark' ? <Icon name="sun" size={14} /> : <Icon name="moon" size={14} />}
             </button>
 
-            {/* Mobile Navigation Toggle (lg:hidden) */}
+            {/* Quick Navigation Drawer Toggle */}
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('tap');
-                setMobileNavOpen((prev) => !prev);
+                toggleNavDrawer();
               }}
-              className="btn-icon w-8 h-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)] lg:hidden"
-              title={mobileNavOpen ? 'Close Navigation' : 'Open Navigation'}
-              aria-label={mobileNavOpen ? 'Close Navigation' : 'Open Navigation'}
-              aria-expanded={mobileNavOpen}
+              className="btn-icon w-8 h-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+              title={mobileNavOpen && !navDrawerClosing ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+              aria-label={mobileNavOpen && !navDrawerClosing ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+              aria-expanded={mobileNavOpen && !navDrawerClosing}
             >
-              <Icon name={mobileNavOpen ? 'close' : 'menu'} size={15} />
+              <Icon name={mobileNavOpen && !navDrawerClosing ? 'close' : 'menu'} size={15} />
             </button>
 
             {/* Notifications (with interactive Liquid Glass popover panel) */}
@@ -696,7 +832,9 @@ export function GlobalNav({ session }: GlobalNavProps) {
                   aria-label="Notifications"
                 >
                   <Icon name="bell" size={15} />
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[var(--status-critical)]" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[var(--status-critical)]" />
+                  )}
                 </button>
 
                 {/* Liquid Glass Notification Panel Popover */}
@@ -707,180 +845,116 @@ export function GlobalNav({ session }: GlobalNavProps) {
                         <span className="text-[13px] font-semibold text-[var(--text-primary)]">
                           Notifications
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[var(--status-critical-subtle)] text-[var(--status-critical)] font-bold">
-                          7 new
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold ${
+                            unreadCount > 0
+                              ? 'bg-[var(--status-critical-subtle)] text-[var(--status-critical)]'
+                              : 'bg-[var(--surface-hover)] text-[var(--text-tertiary)]'
+                          }`}
+                        >
+                          {unreadCount > 0 ? `${unreadCount} new` : 'All read'}
                         </span>
                       </div>
-                      <Link
-                        href="/notifications"
-                        onClick={() => setNotifOpen(false)}
-                        className="text-[11px] text-[var(--accent-blue)] hover:underline font-medium"
-                      >
-                        Settings
-                      </Link>
+                      <div className="flex items-center gap-2.5">
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              triggerHaptic('tap');
+                              setUnreadCount(0);
+                              try {
+                                await fetch('/api/notifications', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ action: 'markAllRead' }),
+                                });
+                                window.dispatchEvent(
+                                  new CustomEvent('sentinel:notifications-updated', {
+                                    detail: { unreadCount: 0 },
+                                  })
+                                );
+                              } catch {}
+                            }}
+                            className="text-[11px] text-[var(--text-tertiary)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <Link
+                          href="/notifications"
+                          onClick={() => setNotifOpen(false)}
+                          className="text-[11px] text-[var(--accent-blue)] hover:underline font-medium"
+                        >
+                          View all
+                        </Link>
+                      </div>
                     </div>
 
                     <div className="max-h-[360px] overflow-y-auto space-y-1 divide-y divide-[var(--border-hairline)]">
-                      {/* Item 1: Critical Finding */}
-                      <Link
-                        href="/findings/SNT-001"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--status-critical-subtle)] text-[var(--status-critical)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="finding" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Prompt injection bypass in agt-research-01
+                      {notifList.length > 0 ? (
+                        notifList.slice(0, 6).map((item) => (
+                          <Link
+                            key={item.id}
+                            href={item.actionUrl || '/notifications'}
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              setNotifOpen(false);
+                            }}
+                            className={`p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block ${
+                              !item.read ? 'bg-[var(--accent-blue)]/5' : ''
+                            }`}
+                          >
+                            <div
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                                item.type?.includes('critical') || item.type?.includes('finding')
+                                  ? 'bg-[var(--status-critical-subtle)] text-[var(--status-critical)]'
+                                  : item.type?.includes('warning') || item.type?.includes('approval')
+                                  ? 'bg-amber-500/15 text-amber-500'
+                                  : 'bg-[var(--status-safe-subtle)] text-[var(--status-safe)]'
+                              }`}
+                            >
+                              <Icon
+                                name={
+                                  item.type?.includes('critical') || item.type?.includes('finding')
+                                    ? 'finding'
+                                    : item.type?.includes('warning') || item.type?.includes('approval')
+                                    ? 'approval'
+                                    : 'check'
+                                }
+                                size={12}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-0.5">
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
+                                  {item.title}
+                                </div>
+                                {!item.read && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-critical)] shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
+                                {item.message}
+                              </p>
+                              <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
+                                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="py-8 text-center space-y-1">
+                          <div className="w-8 h-8 rounded-full bg-[var(--surface-hover)] text-[var(--status-safe)] flex items-center justify-center mx-auto mb-2">
+                            <Icon name="check" size={14} />
                           </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Critical severity • MicroVM enclave triggered boundary alert
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">2m ago</span>
-                        </div>
-                      </Link>
-
-                      {/* Item 2: Approval Required */}
-                      <Link
-                        href="/approvals"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--status-warning-subtle)] text-[var(--status-warning)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="approval" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Approval required: bash execution on host
+                          <div className="text-[12px] font-medium text-[var(--text-primary)]">
+                            All caught up
                           </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Autonomous Code Reviewer requested elevated shell permissions
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">14m ago</span>
-                        </div>
-                      </Link>
-
-                      {/* Item 3: Agent Changed / Drift */}
-                      <Link
-                        href="/agents/agt-fs-sandbox-02"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="refresh" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Configuration drift in agt-fs-sandbox-02
+                          <div className="text-[11px] text-[var(--text-tertiary)]">
+                            Zero unread notifications
                           </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Live runtime mounted /etc beyond baseline approved manifest
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">1h ago</span>
                         </div>
-                      </Link>
-
-                      {/* Item 4: Remediation Complete */}
-                      <Link
-                        href="/remediation"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--status-safe-subtle)] text-[var(--status-safe)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="check" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Remediation complete: Path Sanitization Patch
-                          </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            AST patch applied to File Read Enclave. Ready for retest.
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">3h ago</span>
-                        </div>
-                      </Link>
-
-                      {/* Item 5: Retest Failed */}
-                      <Link
-                        href="/retests"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--status-critical-subtle)] text-[var(--status-critical)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="refresh" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Retest failed: SNT-003 regression
-                          </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Boundary bypass re-occurred under alternate encoding
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">5h ago</span>
-                        </div>
-                      </Link>
-
-                      {/* Item 6: Integration Disconnected */}
-                      <Link
-                        href="/integrations"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--well)] text-[var(--text-tertiary)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="sliders" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Integration: MCP filesystem latency spike
-                          </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Heartbeat timeout exceeded 1500ms threshold
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">8h ago</span>
-                        </div>
-                      </Link>
-
-                      {/* Item 7: Scan Completed with Findings */}
-                      <Link
-                        href="/scans"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setNotifOpen(false);
-                        }}
-                        className="p-2 pt-2.5 rounded-xl hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2.5 group cursor-pointer block"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] flex items-center justify-center shrink-0 mt-0.5">
-                          <Icon name="scan" size={12} />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="text-[12px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] truncate">
-                            Scan completed: 2 findings detected
-                          </div>
-                          <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-1">
-                            Nightly automated AST boundary audit across agent targets
-                          </p>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">12h ago</span>
-                        </div>
-                      </Link>
+                      )}
                     </div>
 
                     <div className="pt-2 border-t border-[var(--border-hairline)] text-center">
@@ -899,7 +973,12 @@ export function GlobalNav({ session }: GlobalNavProps) {
             )}
 
             {/* Account Avatar Trigger */}
-            {session ? (
+            {sessionLoading ? (
+              <div
+                className="w-7 h-7 rounded-full bg-[var(--surface-hover)] border border-[var(--border-hairline)] animate-pulse shrink-0"
+                aria-label="Loading session"
+              />
+            ) : session ? (
               <div className="relative" ref={profileRef}>
                 <button
                   type="button"
@@ -1107,206 +1186,253 @@ export function GlobalNav({ session }: GlobalNavProps) {
         </div>
       )}
 
-      {/* Mobile Navigation Drawer (lg:hidden) */}
+      {/* Quick Navigation Menu - Apple / visionOS Floating Liquid Glass Panel */}
       {mobileNavOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-md lg:hidden flex justify-end animate-fade"
-          onClick={() => setMobileNavOpen(false)}
+          className={`floating-glass-backdrop flex justify-end items-start p-3 sm:p-4 md:p-5 pointer-events-auto ${
+            navDrawerClosing ? 'floating-glass-backdrop-exit' : 'floating-glass-backdrop-enter'
+          }`}
+          onClick={closeNavDrawer}
         >
           <div
-            className="w-full max-w-xs sm:max-w-sm h-full bg-[var(--surface-solid)] border-l border-[var(--border-hairline)] p-5 overflow-y-auto space-y-6 flex flex-col justify-between shadow-2xl"
+            className={`w-full max-w-[360px] sm:max-w-[380px] h-[calc(100vh-1.5rem)] sm:h-[calc(100vh-2rem)] md:h-[min(calc(100vh-2.5rem),860px)] floating-glass-panel p-5 sm:p-6 flex flex-col justify-between overflow-hidden shadow-2xl ${
+              navDrawerClosing ? 'floating-glass-panel-exit' : 'floating-glass-panel-enter'
+            }`}
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quick Navigation"
           >
-            <div className="space-y-5">
-              {/* Header inside drawer */}
-              <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-3">
-                <SentinelLogo size={22} showWordmark={true} wordmarkClassName="text-[14px] font-semibold" />
+            <div className="flex flex-col min-h-0 space-y-4 sm:space-y-5">
+              {/* Header inside floating glass panel */}
+              <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <SentinelLogo size={22} showWordmark={true} wordmarkClassName="text-[14px] font-semibold tracking-tight" />
+                  <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-black/[0.04] dark:bg-white/[0.08] text-[var(--text-tertiary)] border border-black/[0.04] dark:border-white/[0.06]">
+                    Menu
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="btn-icon w-8 h-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  onClick={closeNavDrawer}
+                  className="w-7.5 h-7.5 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.07] dark:hover:bg-white/[0.12] active:scale-90 transition-all border border-black/[0.05] dark:border-white/[0.08] cursor-pointer"
                   aria-label="Close menu"
+                  title="Close (Esc)"
                 >
-                  <Icon name="close" size={15} />
+                  <Icon name="close" size={14} />
                 </button>
               </div>
 
-              {/* Navigation groups */}
-              <div className="space-y-4">
+              {/* Scrollable navigation groups */}
+              <div className="space-y-4 overflow-y-auto pr-1 -mr-1 floating-glass-scroll min-h-0 flex-1">
+                {/* Core Platform */}
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2.5 block mb-1.5">
                     Core Platform
                   </span>
-                  <div className="space-y-0.5">
-                    <Link
-                      href={session ? '/overview' : '/'}
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="overview" size={15} className="text-[var(--accent-blue)]" />
-                      <span>{session ? 'Security Overview' : 'Product Home'}</span>
-                    </Link>
-                    <Link
-                      href="/agents"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="shield" size={15} className="text-[var(--accent-blue)]" />
-                      <span>Agents &amp; Passports</span>
-                    </Link>
-                    <Link
-                      href="/scans"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="scan" size={15} className="text-[var(--accent-blue)]" />
-                      <span>Scans &amp; Audits</span>
-                    </Link>
-                    <Link
-                      href="/findings"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="finding" size={15} className="text-[var(--status-critical)]" />
-                      <span>Findings</span>
-                    </Link>
-                    <Link
-                      href="/investigations"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="search" size={15} className="text-[var(--accent-blue)]" />
-                      <span>Investigations</span>
-                    </Link>
-                    <Link
-                      href="/evidence"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="box" size={15} className="text-[var(--text-tertiary)]" />
-                      <span>Evidence Vault</span>
-                    </Link>
-                    <Link
-                      href="/approvals"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="approval" size={15} className="text-[var(--status-warning)]" />
-                      <span>Approvals</span>
-                    </Link>
-                    <Link
-                      href="/remediation"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="check" size={15} className="text-[var(--status-safe)]" />
-                      <span>Remediation</span>
-                    </Link>
+                  <div className="space-y-1">
+                    {[
+                      { href: session ? '/overview' : '/', label: session ? 'Security Overview' : 'Product Home', icon: 'overview' as IconName, active: pathname === '/' || pathname === '/overview' },
+                      { href: '/agents', label: 'Agents & Passports', icon: 'shield' as IconName, active: pathname.startsWith('/agents') },
+                      { href: '/scans', label: 'Scans & Audits', icon: 'scan' as IconName, active: pathname.startsWith('/scans') },
+                      { href: '/findings', label: 'Findings', icon: 'finding' as IconName, active: pathname.startsWith('/findings') },
+                      { href: '/investigations', label: 'Investigations', icon: 'search' as IconName, active: pathname.startsWith('/investigations') },
+                      { href: '/evidence', label: 'Evidence Vault', icon: 'box' as IconName, active: pathname.startsWith('/evidence') },
+                      { href: '/approvals', label: 'Approvals', icon: 'approval' as IconName, active: pathname.startsWith('/approvals') },
+                      { href: '/remediation', label: 'Remediation', icon: 'check' as IconName, active: pathname.startsWith('/remediation') },
+                    ].map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeNavDrawer}
+                        className={`flex items-center justify-between px-3 py-2 rounded-[13px] text-[13px] font-medium transition-all group ${
+                          item.active
+                            ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] shadow-xs'
+                            : 'text-[var(--text-primary)] hover:bg-black/[0.035] dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                              item.active
+                                ? 'bg-[var(--accent-blue)] text-white'
+                                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            <Icon name={item.icon} size={13} />
+                          </span>
+                          <span>{item.label}</span>
+                        </div>
+                        {item.active && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)] shrink-0" />
+                        )}
+                      </Link>
+                    ))}
                   </div>
                 </div>
 
+                {/* Intelligence & Analytics */}
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2.5 block mb-1.5">
                     Intelligence &amp; Analytics
                   </span>
-                  <div className="space-y-0.5">
-                    <Link
-                      href="/ai-workspace"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="code" size={15} className="text-[var(--accent-blue)]" />
-                      <span>AI Workspace</span>
-                    </Link>
-                    <Link
-                      href="/analytics"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="activity" size={15} className="text-[var(--accent-blue)]" />
-                      <span>Security Analytics</span>
-                    </Link>
-                    <Link
-                      href="/activity"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="clock" size={15} className="text-[var(--text-tertiary)]" />
-                      <span>Activity Trail</span>
-                    </Link>
+                  <div className="space-y-1">
+                    {[
+                      { href: '/ai-workspace', label: 'AI Workspace', icon: 'code' as IconName, active: pathname.startsWith('/ai-workspace') },
+                      { href: '/analytics', label: 'Security Analytics', icon: 'activity' as IconName, active: pathname.startsWith('/analytics') },
+                      { href: '/activity', label: 'Activity Trail', icon: 'clock' as IconName, active: pathname.startsWith('/activity') },
+                    ].map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeNavDrawer}
+                        className={`flex items-center justify-between px-3 py-2 rounded-[13px] text-[13px] font-medium transition-all group ${
+                          item.active
+                            ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] shadow-xs'
+                            : 'text-[var(--text-primary)] hover:bg-black/[0.035] dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                              item.active
+                                ? 'bg-[var(--accent-blue)] text-white'
+                                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            <Icon name={item.icon} size={13} />
+                          </span>
+                          <span>{item.label}</span>
+                        </div>
+                        {item.active && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)] shrink-0" />
+                        )}
+                      </Link>
+                    ))}
                   </div>
                 </div>
 
+                {/* Documentation & Support */}
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2.5 block mb-1.5">
                     Documentation &amp; Support
                   </span>
-                  <div className="space-y-0.5">
-                    <Link
-                      href="/support"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="sliders" size={15} className="text-[var(--accent-blue)]" />
-                      <span>Support Center</span>
-                    </Link>
-                    <Link
-                      href="/security"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                    >
-                      <Icon name="shield" size={15} className="text-[var(--status-safe)]" />
-                      <span>Security Architecture</span>
-                    </Link>
+                  <div className="space-y-1">
+                    {[
+                      { href: '/support', label: 'Support Center', icon: 'sliders' as IconName, active: pathname.startsWith('/support') },
+                      { href: '/security', label: 'Security Architecture', icon: 'shield' as IconName, active: pathname === '/security' },
+                    ].map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeNavDrawer}
+                        className={`flex items-center justify-between px-3 py-2 rounded-[13px] text-[13px] font-medium transition-all group ${
+                          item.active
+                            ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] shadow-xs'
+                            : 'text-[var(--text-primary)] hover:bg-black/[0.035] dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                              item.active
+                                ? 'bg-[var(--accent-blue)] text-white'
+                                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            <Icon name={item.icon} size={13} />
+                          </span>
+                          <span>{item.label}</span>
+                        </div>
+                        {item.active && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-blue)] shrink-0" />
+                        )}
+                      </Link>
+                    ))}
                   </div>
                 </div>
 
+                {/* Administration (if owner or admin) */}
                 {(session?.role === 'owner' || session?.role === 'admin') && (
                   <div>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-2 block mb-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-2.5 block mb-1.5">
                       Administration
                     </span>
                     <Link
                       href="/owner"
-                      onClick={() => setMobileNavOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                      onClick={closeNavDrawer}
+                      className={`flex items-center justify-between px-3 py-2 rounded-[13px] text-[13px] font-medium transition-all group ${
+                        pathname.startsWith('/owner')
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-xs'
+                          : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
+                      }`}
                     >
-                      <Icon name="shield" size={15} />
-                      <span>{session?.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-lg flex items-center justify-center bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                          <Icon name="shield" size={13} />
+                        </span>
+                        <span>{session?.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        {session?.role}
+                      </span>
                     </Link>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Bottom session area */}
-            <div className="pt-4 border-t border-[var(--border-hairline)] space-y-2">
-              {session ? (
-                <>
-                  <Link
-                    href="/profile"
-                    onClick={() => setMobileNavOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                  >
-                    <Icon name="lock" size={15} className="text-[var(--text-tertiary)]" />
-                    <span>Profile &amp; Security</span>
-                  </Link>
-                  <form action="/api/auth/logout" method="POST">
-                    <button
-                      type="submit"
-                      onClick={() => triggerHaptic('tap')}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] text-[var(--status-critical)] hover:bg-[var(--status-critical-subtle)] text-left cursor-pointer"
+            {/* Bottom session / profile area */}
+            <div className="pt-3.5 border-t border-black/[0.06] dark:border-white/[0.08] space-y-2 shrink-0">
+              {sessionLoading ? (
+                <div className="h-10 rounded-[14px] bg-black/[0.04] dark:bg-white/[0.06] animate-pulse" />
+              ) : session ? (
+                <div className="p-2.5 rounded-[16px] bg-black/[0.025] dark:bg-white/[0.04] border border-black/[0.04] dark:border-white/[0.06] space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-blue)] text-white text-[12px] font-semibold flex items-center justify-center shrink-0 shadow-xs">
+                        {session.name ? session.name.charAt(0).toUpperCase() : session.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-medium text-[var(--text-primary)] truncate">
+                          {session.name || session.email}
+                        </div>
+                        <div className="text-[11px] text-[var(--text-tertiary)] truncate">
+                          {session.email}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[9.5px] font-semibold uppercase px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/[0.08] text-[var(--text-secondary)] shrink-0">
+                      {session.role}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    <Link
+                      href="/profile"
+                      onClick={closeNavDrawer}
+                      className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors"
                     >
-                      <Icon name="close" size={13} />
-                      <span>Sign Out</span>
-                    </button>
-                  </form>
-                </>
+                      <Icon name="lock" size={12} />
+                      <span>Profile</span>
+                    </Link>
+                    <form action="/api/auth/logout" method="POST">
+                      <button
+                        type="submit"
+                        onClick={() => triggerHaptic('tap')}
+                        className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-[12px] font-medium text-[var(--status-critical)] hover:bg-[var(--status-critical-subtle)] transition-colors cursor-pointer"
+                      >
+                        <Icon name="close" size={12} />
+                        <span>Sign Out</span>
+                      </button>
+                    </form>
+                  </div>
+                </div>
               ) : (
                 <Link
                   href="/login"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="btn-primary w-full justify-center h-9 text-[13px]"
+                  onClick={closeNavDrawer}
+                  className="btn-primary w-full justify-center h-10 text-[13px] rounded-[14px]"
                 >
                   Sign In
                 </Link>
