@@ -9,8 +9,11 @@ export const metadata = {
 
 export default async function SecretsPage() {
   const session = await getSession();
-  if (!session || session.role !== 'owner') {
-    redirect('/overview');
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.role !== 'owner') {
+    redirect('/owner?error=Owner+privileges+required');
   }
 
   const secrets = [

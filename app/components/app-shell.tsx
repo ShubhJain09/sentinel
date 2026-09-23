@@ -107,7 +107,7 @@ export function AppShell({ children, session }: AppShellProps) {
 
             {/* Bottom Enclave Status & Owner Center (if owner) */}
             <div className="pt-4 border-t border-[var(--border-hairline)] space-y-2">
-              {session.role === 'owner' && (
+              {(session.role === 'owner' || session.role === 'admin') && (
                 <Link
                   href="/owner"
                   onClick={() => triggerHaptic('selection')}
@@ -118,7 +118,7 @@ export function AppShell({ children, session }: AppShellProps) {
                   }`}
                 >
                   <Icon name="shield" size={14} />
-                  <span>Owner Control Center</span>
+                  <span>{session.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
                 </Link>
               )}
 

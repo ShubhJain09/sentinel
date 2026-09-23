@@ -1,10 +1,17 @@
 'use server';
 
 import { getSession } from '@/app/lib/auth';
-import { getDb, generateId, now } from '@/app/lib/db';
+import { getDb, generateId, now, getUserById } from '@/app/lib/db';
 import type { UserRole, Session } from '@/app/lib/types';
+import { canSuspendUser, canTerminateUser } from '@/app/lib/permissions';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
+
+function requireAdminOrOwner(session: Session | null): asserts session is Session & { role: 'owner' | 'admin' } {
+  if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
+    throw new Error('Access denied: Administrator authorization required');
+  }
+}
 
 function requireOwner(session: Session | null): asserts session is Session & { role: 'owner' } {
   if (!session || session.role !== 'owner') {
@@ -14,11 +21,18 @@ function requireOwner(session: Session | null): asserts session is Session & { r
 
 export async function inviteUser(formData: FormData) {
   const session = await getSession();
-  requireOwner(session);
+  requireAdminOrOwner(session);
 
   const email = (formData.get('email') as string)?.trim().toLowerCase();
   const name = (formData.get('name') as string)?.trim();
-  const role = (formData.get('role') as UserRole) || 'analyst';
+  let requestedRole = (formData.get('role') as UserRole) || 'user';
+
+  // Admin can ONLY invite normal users; only Owner can invite Admins
+  if (session.role === 'admin') {
+    requestedRole = 'user';
+  } else if (requestedRole !== 'admin' && requestedRole !== 'user') {
+    requestedRole = 'user';
+  }
 
   if (!email || !name) {
     return { success: false, error: 'Name and email are required' };
@@ -43,7 +57,7 @@ export async function inviteUser(formData: FormData) {
   db.prepare(`
     INSERT INTO users (id, email, name, passwordHash, role, avatarInitials, workspaceId, createdAt, updatedAt, isActive)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `).run(userId, email, name, passwordHash, role, avatarInitials, session.workspaceId, timestamp, timestamp);
+  `).run(userId, email, name, passwordHash, requestedRole, avatarInitials, session.workspaceId, timestamp, timestamp);
 
   db.prepare(`
     INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
@@ -53,7 +67,7 @@ export async function inviteUser(formData: FormData) {
     session.userId,
     session.name,
     userId,
-    `Invited ${name} (${email}) with role ${role}`,
+    `Invited ${name} (${email}) with role ${requestedRole}`,
     timestamp
   );
 
@@ -63,13 +77,23 @@ export async function inviteUser(formData: FormData) {
 
 export async function updateUserRole(userId: string, newRole: UserRole) {
   const session = await getSession();
+  // Strictly enforce that ONLY Owner can manage user roles (promotions/demotions)
   requireOwner(session);
+
+  if (newRole === 'owner') {
+    return { success: false, error: 'Cannot assign Platform Owner role' };
+  }
 
   const db = getDb();
   const timestamp = now();
 
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+
   // Protect owner from demoting themselves if they are the only owner
-  if (userId === session.userId && newRole !== 'owner') {
+  if (userId === session.userId) {
     const ownerCount = (db.prepare('SELECT COUNT(*) as count FROM users WHERE role = "owner" AND isActive = 1').get() as { count: number }).count;
     if (ownerCount <= 1) {
       return { success: false, error: 'Cannot demote the sole platform owner' };
@@ -86,7 +110,7 @@ export async function updateUserRole(userId: string, newRole: UserRole) {
     session.userId,
     session.name,
     userId,
-    `Changed role of user ${userId} to ${newRole}`,
+    `Changed role of ${targetUser.name} (${targetUser.email}) from ${targetUser.role} to ${newRole}`,
     timestamp
   );
 
@@ -96,10 +120,25 @@ export async function updateUserRole(userId: string, newRole: UserRole) {
 
 export async function toggleUserStatus(userId: string, currentStatus: boolean) {
   const session = await getSession();
-  requireOwner(session);
+  requireAdminOrOwner(session);
 
-  if (userId === session.userId) {
-    return { success: false, error: 'Cannot suspend your own owner account' };
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  // Hierarchy check:
+  // - Cannot suspend self
+  // - Target cannot be owner
+  // - Admin CANNOT suspend another Admin
+  if (!canSuspendUser(session.role, targetUser.role, session.userId === userId)) {
+    if (targetUser.role === 'owner') {
+      return { success: false, error: 'Platform Owner cannot be suspended' };
+    }
+    if (session.role === 'admin' && targetUser.role === 'admin') {
+      return { success: false, error: 'Administrators cannot suspend other administrators' };
+    }
+    return { success: false, error: 'Cannot suspend your own account' };
   }
 
   const db = getDb();
@@ -117,10 +156,64 @@ export async function toggleUserStatus(userId: string, currentStatus: boolean) {
     session.userId,
     session.name,
     userId,
-    `${newStatus === 1 ? 'Restored' : 'Suspended'} user ${userId}`,
+    `${newStatus === 1 ? 'Restored' : 'Suspended'} user ${targetUser.name} (${targetUser.email})`,
     timestamp
   );
 
   revalidatePath('/owner/users');
   return { success: true, isActive: newStatus === 1 };
+}
+
+export async function terminateUser(userId: string) {
+  const session = await getSession();
+  requireAdminOrOwner(session);
+
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  // Hierarchy check:
+  // - Cannot terminate self
+  // - Target cannot be owner
+  // - Admin CANNOT terminate another Admin
+  if (!canTerminateUser(session.role, targetUser.role, session.userId === userId)) {
+    if (targetUser.role === 'owner') {
+      return { success: false, error: 'Platform Owner cannot be terminated' };
+    }
+    if (session.role === 'admin' && targetUser.role === 'admin') {
+      return { success: false, error: 'Administrators cannot terminate other administrators' };
+    }
+    return { success: false, error: 'Cannot terminate your own account' };
+  }
+
+  const db = getDb();
+  const timestamp = now();
+
+  // Log audit event before deleting user
+  db.prepare(`
+    INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
+    VALUES (?, 'user.terminated', ?, ?, 'user', ?, ?, ?)
+  `).run(
+    generateId(),
+    session.userId,
+    session.name,
+    userId,
+    `Terminated account for ${targetUser.name} (${targetUser.email})`,
+    timestamp
+  );
+
+  // Clean up dependent child records
+  db.prepare('DELETE FROM login_challenges WHERE userId = ?').run(userId);
+  db.prepare('DELETE FROM password_reset_tokens WHERE userId = ?').run(userId);
+  db.prepare('DELETE FROM passkeys WHERE userId = ?').run(userId);
+  db.prepare('DELETE FROM connected_accounts WHERE userId = ?').run(userId);
+  db.prepare('DELETE FROM notifications WHERE userId = ?').run(userId);
+  db.prepare('DELETE FROM user_settings WHERE userId = ?').run(userId);
+
+  // Delete user record
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+  revalidatePath('/owner/users');
+  return { success: true };
 }

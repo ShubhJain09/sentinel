@@ -1,5 +1,5 @@
 // User roles
-export type UserRole = 'owner' | 'admin' | 'analyst' | 'reviewer' | 'viewer';
+export type UserRole = 'owner' | 'admin' | 'user' | 'analyst' | 'reviewer' | 'viewer';
 
 // User
 export interface User {

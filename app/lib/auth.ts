@@ -64,14 +64,30 @@ export async function getSession(): Promise<Session | null> {
     });
 
     const userSession = payload as unknown as Session;
+
+    // Cross-check live user state in database
+    const { getUserById } = await import('@/app/lib/db');
+    const dbUser = getUserById(userSession.userId);
+    if (!dbUser || !dbUser.isActive) {
+      return null;
+    }
+
     const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
       .toLowerCase()
       .split(',')
       .map((e) => e.trim());
 
-    if (userSession.email && ownerEmails.includes(userSession.email.toLowerCase())) {
+    if (dbUser.email && ownerEmails.includes(dbUser.email.toLowerCase())) {
       userSession.role = 'owner';
+    } else {
+      userSession.role = dbUser.role;
     }
+
+    userSession.name = dbUser.name;
+    userSession.email = dbUser.email;
+    userSession.username = dbUser.username;
+    userSession.avatarUrl = dbUser.avatarUrl;
+    userSession.avatarInitials = dbUser.avatarInitials;
 
     return userSession;
   } catch (error) {
@@ -323,7 +339,7 @@ export async function handleOAuthLogin({
     .toLowerCase()
     .split(',')
     .map((e) => e.trim());
-  const role = ownerEmails.includes(normalizedEmail) ? 'owner' : 'analyst';
+  const role = ownerEmails.includes(normalizedEmail) ? 'owner' : 'user';
 
   const randomSalt = generateId() + generateId();
   const passwordHash = await hashPassword(randomSalt);

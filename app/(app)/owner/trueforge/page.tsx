@@ -9,7 +9,7 @@ export const metadata = {
 
 export default async function TrueForgeGatewayPage() {
   const session = await getSession();
-  if (!session || session.role !== 'owner') {
+  if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
     redirect('/overview');
   }
 

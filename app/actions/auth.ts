@@ -82,7 +82,7 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
       .split(',')
       .map((e) => e.trim());
     const isDesignatedOwner = ownerEmails.includes(email.toLowerCase().trim());
-    const role: UserRole = isDesignatedOwner || userCount === 0 ? 'owner' : 'analyst';
+    const role: UserRole = isDesignatedOwner || userCount === 0 ? 'owner' : 'user';
 
     const hashedPassword = await hashPassword(password);
     const userId = generateId();

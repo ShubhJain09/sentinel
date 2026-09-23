@@ -76,14 +76,28 @@ export async function middleware(request: NextRequest) {
       .split(',')
       .map((e) => e.trim());
     const isOwner = payload.role === 'owner' || (typeof payload.email === 'string' && ownerEmails.includes(payload.email.toLowerCase()));
+    const isAdmin = payload.role === 'admin';
 
-    // Check owner routes
+    // Check owner / admin routes
     if (pathname === '/owner' || pathname.startsWith('/owner/')) {
-      if (!isOwner) {
-        const url = new URL('/overview', request.url);
-        url.searchParams.set('error', 'Unauthorized access');
-        return NextResponse.redirect(url);
+      if (isOwner) {
+        return NextResponse.next();
       }
+
+      if (isAdmin) {
+        const ownerOnlyPrefixes = ['/owner/secrets', '/owner/diagnostics', '/owner/security'];
+        if (ownerOnlyPrefixes.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+          const url = new URL('/owner', request.url);
+          url.searchParams.set('error', 'Owner privileges required');
+          return NextResponse.redirect(url);
+        }
+        return NextResponse.next();
+      }
+
+      // If token does not reflect admin/owner yet, check live DB via refresh route
+      const refreshUrl = new URL('/api/auth/refresh', request.url);
+      refreshUrl.searchParams.set('redirect', pathname + request.nextUrl.search);
+      return NextResponse.redirect(refreshUrl);
     }
     
     return NextResponse.next();

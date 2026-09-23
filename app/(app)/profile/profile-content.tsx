@@ -898,14 +898,14 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
         </div>
 
         <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
-          {session.role === 'owner' && (
+          {(session.role === 'owner' || session.role === 'admin') && (
             <Link
               href="/owner"
               onClick={() => triggerHaptic('selection')}
               className="btn-primary text-[12.5px] h-8.5 px-3.5"
             >
               <Icon name="shield" size={14} />
-              <span>Owner Control Center</span>
+              <span>{session.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
             </Link>
           )}
         </div>
@@ -1005,13 +1005,15 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
                       {name || 'Security Operator'}
                     </h2>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 border ${
                         session.role === 'owner'
-                          ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)]'
-                          : 'bg-[var(--well)] text-[var(--text-secondary)]'
+                          ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                          : session.role === 'admin'
+                          ? 'bg-[var(--status-safe)]/10 text-[var(--status-safe)] border-[var(--status-safe)]/20'
+                          : 'bg-[var(--well)] text-[var(--text-secondary)] border-[var(--border-hairline)]'
                       }`}
                     >
-                      {session.role === 'owner' ? '★ Owner' : session.role}
+                      {session.role === 'owner' ? '★ Owner' : session.role === 'admin' ? '🛡 Admin' : 'User'}
                     </span>
                   </div>
 

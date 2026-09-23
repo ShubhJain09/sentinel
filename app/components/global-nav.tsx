@@ -91,9 +91,9 @@ export function GlobalNav({ session }: GlobalNavProps) {
     { label: 'Security Architecture', href: '/security', category: 'Resources', icon: 'shield' as IconName },
     { label: 'Privacy Policy', href: '/privacy', category: 'Legal', icon: 'lock' as IconName },
     { label: 'Terms of Service', href: '/terms', category: 'Legal', icon: 'lock' as IconName },
-    ...(session?.role === 'owner'
+    ...(session?.role === 'owner' || session?.role === 'admin'
       ? [
-          { label: 'Owner Control Center', href: '/owner', category: 'Administration', icon: 'shield' as IconName },
+          { label: session?.role === 'owner' ? 'Owner Control Center' : 'Admin Centre', href: '/owner', category: 'Administration', icon: 'shield' as IconName },
           { label: 'User Provisioning', href: '/owner/users', category: 'Administration', icon: 'shield' as IconName },
           { label: 'Roles & RBAC', href: '/owner/roles', category: 'Administration', icon: 'lock' as IconName },
           { label: 'Tenant Workspaces', href: '/owner/workspaces', category: 'Administration', icon: 'box' as IconName },
@@ -102,7 +102,9 @@ export function GlobalNav({ session }: GlobalNavProps) {
           { label: 'Runtime Internals', href: '/owner/runtime', category: 'Administration', icon: 'shield' as IconName },
           { label: 'AI Providers & Wiring', href: '/owner/providers', category: 'Administration', icon: 'code' as IconName },
           { label: 'Technical Integrations', href: '/owner/integrations', category: 'Administration', icon: 'sliders' as IconName },
-          { label: 'System Diagnostics', href: '/owner/diagnostics', category: 'Administration', icon: 'activity' as IconName },
+          ...(session?.role === 'owner'
+            ? [{ label: 'System Diagnostics', href: '/owner/diagnostics', category: 'Administration', icon: 'activity' as IconName }]
+            : []),
         ]
       : []),
   ];
@@ -526,8 +528,8 @@ export function GlobalNav({ session }: GlobalNavProps) {
               Support
             </Link>
 
-            {/* 4. Admin Trigger (Owner Only) */}
-            {session?.role === 'owner' && (
+            {/* 4. Admin Trigger (Owner or Admin) */}
+            {(session?.role === 'owner' || session?.role === 'admin') && (
               <div
                 className="relative py-3.5"
                 onMouseEnter={() => handleMouseEnter('admin')}
@@ -617,11 +619,13 @@ export function GlobalNav({ session }: GlobalNavProps) {
                               Technical Integrations
                             </Link>
                           </li>
-                          <li>
-                            <Link href="/owner/secrets" className="block text-[var(--text-primary)] hover:text-[var(--accent-blue)]">
-                              Environment Secrets
-                            </Link>
-                          </li>
+                          {session?.role === 'owner' && (
+                            <li>
+                              <Link href="/owner/secrets" className="block text-[var(--text-primary)] hover:text-[var(--accent-blue)]">
+                                Environment Secrets
+                              </Link>
+                            </li>
+                          )}
                         </ul>
                       </div>
                     </div>
@@ -929,11 +933,13 @@ export function GlobalNav({ session }: GlobalNavProps) {
                         <span
                           className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-semibold uppercase ${
                             session.role === 'owner'
-                              ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)]'
-                              : 'bg-[var(--well)] text-[var(--text-secondary)]'
+                              ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
+                              : session.role === 'admin'
+                              ? 'bg-[var(--status-safe)]/15 text-[var(--status-safe)] border border-[var(--status-safe)]/20'
+                              : 'bg-[var(--well)] text-[var(--text-secondary)] border border-[var(--border-hairline)]'
                           }`}
                         >
-                          {session.role === 'owner' ? '★ Owner' : session.role}
+                          {session.role === 'owner' ? '★ Owner' : session.role === 'admin' ? '🛡 Admin' : 'User'}
                         </span>
                       </div>
 
@@ -984,14 +990,14 @@ export function GlobalNav({ session }: GlobalNavProps) {
                         <span>Keyboard Shortcuts</span>
                       </Link>
 
-                      {session.role === 'owner' && (
+                      {(session.role === 'owner' || session.role === 'admin') && (
                         <Link
                           href="/owner"
                           onClick={() => setProfileOpen(false)}
                           className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-medium transition-colors"
                         >
                           <Icon name="shield" size={13} />
-                          <span>Owner Control Center</span>
+                          <span>{session.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
                         </Link>
                       )}
                     </div>
@@ -1255,7 +1261,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
                   </div>
                 </div>
 
-                {session?.role === 'owner' && (
+                {(session?.role === 'owner' || session?.role === 'admin') && (
                   <div>
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-2 block mb-1">
                       Administration
@@ -1266,7 +1272,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
                       className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
                     >
                       <Icon name="shield" size={15} />
-                      <span>Owner Control Center</span>
+                      <span>{session?.role === 'owner' ? 'Owner Control Center' : 'Admin Centre'}</span>
                     </Link>
                   </div>
                 )}

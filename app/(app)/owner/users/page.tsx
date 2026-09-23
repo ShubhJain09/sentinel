@@ -10,7 +10,7 @@ export const metadata = {
 export default async function UsersPage() {
   const session = await getSession();
 
-  if (!session || session.role !== 'owner') {
+  if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
     redirect('/overview');
   }
 

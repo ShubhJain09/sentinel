@@ -9,7 +9,7 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
     redirect('/login');
   }
 
-  if (session.role !== 'owner') {
+  if (session.role !== 'owner' && session.role !== 'admin') {
     redirect('/overview');
   }
 

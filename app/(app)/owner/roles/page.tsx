@@ -11,7 +11,7 @@ export const metadata = {
 export default async function RolesPage() {
   const session = await getSession();
 
-  if (!session || session.role !== 'owner') {
+  if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
     redirect('/overview');
   }
 
@@ -29,6 +29,13 @@ export default async function RolesPage() {
       description: 'Manages workspace configurations, user invitations, and tool integrations without global policy overrides.',
       permissions: [...ROLE_PERMISSIONS.admin],
       color: '#30d158',
+    },
+    {
+      id: 'user',
+      name: 'Standard User / Analyst',
+      description: 'Executes security scans, interrogates findings, inspects evidence traces, and manages operational tasks.',
+      permissions: [...ROLE_PERMISSIONS.user],
+      color: '#2997ff',
     },
     {
       id: 'analyst',
