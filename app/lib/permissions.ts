@@ -119,10 +119,15 @@ export function isAdminOrOwner(role: UserRole): boolean {
 
 /**
  * Access Control Boundaries for Admin Centre & Owner Surfaces
+ * - canAccessAdminCenter / canAccessAdminCentre: OWNER and ADMIN accounts.
+ * - canAccessOwnerCenter / canAccessOwnerCentre: Platform OWNER accounts only.
  */
 export function canAccessAdminCenter(role: UserRole): boolean {
   return isAdminOrOwner(role);
 }
+
+// Semantic British English alias
+export const canAccessAdminCentre = canAccessAdminCenter;
 
 export function canAccessOwnerPanel(role: UserRole): boolean {
   return isAdminOrOwner(role);
@@ -132,6 +137,10 @@ export function canAccessOwnerOnly(role: UserRole): boolean {
   return isOwner(role);
 }
 
+// Semantic alias for platform owner control room
+export const canAccessOwnerCentre = canAccessOwnerOnly;
+export const canAccessOwnerCenter = canAccessOwnerOnly;
+
 /**
  * Role Modification Matrix:
  * ONLY an OWNER can assign, promote, or demote roles.
@@ -139,6 +148,31 @@ export function canAccessOwnerOnly(role: UserRole): boolean {
  */
 export function canManageUserRole(actorRole: UserRole): boolean {
   return actorRole === 'owner';
+}
+
+/**
+ * General User Management Helper:
+ * Evaluates whether an actor role has operational authority over a target role.
+ * - OWNER can manage ADMIN and USER accounts.
+ * - ADMIN can manage normal USER accounts only.
+ * - USER cannot manage any accounts.
+ */
+export function canManageUser(actorRole: UserRole, targetRole: UserRole): boolean {
+  if (actorRole === 'owner') return true;
+  if (actorRole === 'admin') return targetRole === 'user';
+  return false;
+}
+
+/**
+ * User Promotion & Demotion Helpers:
+ * Strictly restricted to platform OWNERs.
+ */
+export function canPromoteUser(actorRole: UserRole, targetRole: UserRole): boolean {
+  return actorRole === 'owner' && targetRole === 'user';
+}
+
+export function canDemoteUser(actorRole: UserRole, targetRole: UserRole): boolean {
+  return actorRole === 'owner' && targetRole === 'admin';
 }
 
 /**

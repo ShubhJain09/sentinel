@@ -42,6 +42,8 @@ import type {
  * ==============================================================================
  */
 
+// ── Section 1: Database Initialization, SQLite Schema & Seeding ────────────
+
 let dbInstance: Database.Database | null = null;
 
 export function generateId(): string {
@@ -531,7 +533,7 @@ export function getDb(): Database.Database {
   return db;
 }
 
-// ── Query & Mutation Helpers for Real Operational Data ───────────────────────
+// ── Section 2: Core Security Operations (Scans, Findings, Evidence, Approvals) ─
 
 export function getOverviewCounts() {
   const db = getDb();
@@ -590,6 +592,8 @@ export function getAllIntegrations(): Integration[] {
   const db = getDb();
   return db.prepare('SELECT * FROM integrations ORDER BY createdAt ASC').all() as Integration[];
 }
+
+// ── Section 3: User Accounts, Profiles & Connected OAuth ────────────────────
 
 export function getAllUsers(): User[] {
   const db = getDb();
@@ -675,6 +679,8 @@ export function deleteConnectedAccount(userId: string, provider: string): { succ
   return { success: true };
 }
 
+// ── Section 4: AI Agent Registry, Shadow Mode & Drift Monitoring ─────────────
+
 function parseAgentRow(row: any): Agent {
   return {
     ...row,
@@ -709,7 +715,7 @@ export function acknowledgeAgentDrift(id: string): void {
   db.prepare("UPDATE agents SET driftStatus = 'clean', driftDetails = NULL, updatedAt = ? WHERE id = ?").run(now(), id);
 }
 
-// ── AI Security Workspace Conversations ──────────────────────────────────────
+// ── Section 5: AI Workspace & Investigation Sessions ─────────────────────────
 
 function parseConversationRow(row: any): AiConversation {
   return {
@@ -927,7 +933,7 @@ export function shareAiConversation(id: string, userId: string): string {
   }
 }
 
-// ── Password Reset Tokens Helpers ──
+// ── Section 6: Password Reset & Account Recovery ─────────────────────────────
 
 export interface PasswordResetTokenRecord {
   id: string;
@@ -1000,6 +1006,8 @@ export function updateUserPassword(userId: string, passwordHash: string): void {
   `).run(passwordHash, timestamp, userId);
 }
 
+// ── Section 7: Email Delivery & Outbox Audit Logging ─────────────────────────
+
 export function recordEmailLog(entry: {
   id?: string;
   recipient: string;
@@ -1038,7 +1046,7 @@ export function getRecentEmailLogs(limit = 20) {
   }
 }
 
-// ── Login Challenges (Email OTP) Helpers ──
+// ── Section 8: Authentication Challenges & 2FA Email OTP ─────────────────────
 
 export interface LoginChallengeRecord {
   id: string;
@@ -1121,7 +1129,7 @@ export function updateLoginChallengeOtp(challengeId: string, otpHash: string, ex
 
 /**
  * ==============================================================================
- * NOTIFICATION SUBSYSTEM & PERSISTENCE
+ * Section 9: Notifications & In-App Alert Subsystem
  * ==============================================================================
  */
 

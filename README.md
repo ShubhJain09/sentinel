@@ -22,6 +22,7 @@ For comprehensive documentation, explore the specialized guides:
 
 | Document | Purpose |
 |---|---|
+| [**MENTOR_WALKTHROUGH.md**](./MENTOR_WALKTHROUGH.md) | 15 core concepts explained for beginners and a 5-minute technical walkthrough script. |
 | [**ARCHITECTURE.md**](./ARCHITECTURE.md) | High-level system architecture, ASCII component diagram, and layer breakdown. |
 | [**CODEBASE_GUIDE.md**](./CODEBASE_GUIDE.md) | Directory structure walkthrough, module boundaries, and developer how-to recipes. |
 | [**REQUEST_FLOW.md**](./REQUEST_FLOW.md) | Step-by-step traces with exact file references for 10 core application flows. |

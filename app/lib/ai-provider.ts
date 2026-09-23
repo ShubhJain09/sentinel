@@ -356,3 +356,25 @@ export function getActiveProvider(): AiProvider {
   const configured = providers.find(p => p.id !== 'sentinel-sandbox' && p.isConfigured);
   return configured || providers[0];
 }
+
+/**
+ * High-Level Hackathon Facade:
+ * Executes an automated security investigation against a target runtime.
+ * Delegates dynamically to TrueForge if configured, or falls back seamlessly
+ * to the built-in deterministic sandbox engine.
+ *
+ * Core Flow:
+ * User starts scan -> request validated -> authorization checked ->
+ * SENTINEL investigation created -> TrueForge agent invoked ->
+ * MCP/tools available -> sandbox testing -> evidence collected ->
+ * finding classified -> remediation proposed -> human approval ->
+ * fix -> retest -> result
+ */
+export async function runTrueForgeInvestigation(
+  target: string,
+  scope: string[] = ['permissions', 'boundaries']
+): Promise<InspectionResult> {
+  const provider = getActiveProvider();
+  return provider.runSecurityInspection(target, scope);
+}
+

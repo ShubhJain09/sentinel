@@ -39,7 +39,9 @@ sentinel/
 │   │   ├── reset-password/       # Validate token & submit new password
 │   │   └── onboarding/           # First-time operator profile setup
 │   ├── actions/                  # Next.js Server Actions ("use server" mutations)
-│   │   ├── auth.ts               # Login, registration, password reset, OTP verification
+│   │   ├── auth.ts               # Core auth (signup, login, OTP verification, logout)
+│   │   ├── profile.ts            # Operator profile updates & password changes
+│   │   ├── password-reset.ts     # Public forgot-password and reset token verification
 │   │   ├── scans.ts              # Triggering and recording security scans
 │   │   ├── approvals.ts          # Approving patches & executing retests
 │   │   ├── agents.ts             # Toggling agent shadow mode & drift acknowledgement
@@ -71,6 +73,7 @@ sentinel/
 │   ├── ci-check.js               # 50-point automated CI/CT verification suite
 │   └── test-all-routes.js        # Comprehensive HTTP route crawler
 ├── middleware.ts                 # Edge request interceptor & route guard
+├── MENTOR_WALKTHROUGH.md         # 15 core concepts & 5-minute technical presentation script
 ├── ARCHITECTURE.md               # System architecture & layer documentation
 ├── CODEBASE_GUIDE.md             # This guide
 ├── REQUEST_FLOW.md               # Step-by-step request flow traces

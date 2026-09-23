@@ -7,11 +7,6 @@ import {
   generateId,
   now,
   getUserById,
-  createPasswordResetToken,
-  getPasswordResetTokenByHash,
-  markPasswordResetTokenUsed,
-  invalidateAllUserResetTokens,
-  updateUserPassword,
   createLoginChallenge,
   getLoginChallenge,
   incrementLoginChallengeAttempts,
@@ -30,7 +25,7 @@ import {
   clearLoginChallengeCookie,
   maskEmail,
 } from '@/app/lib/auth';
-import { sendPasswordResetEmail, sendLoginOtpEmail } from '@/app/lib/email';
+import { sendLoginOtpEmail } from '@/app/lib/email';
 import type { UserRole } from '@/app/lib/types';
 import { redirect } from 'next/navigation';
 
@@ -140,7 +135,9 @@ export async function login(prevState: ActionState, formData: FormData): Promise
   try {
     const db = getDb();
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ? AND isActive = 1').get(email) as {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND isActive = 1').get(normalizedEmail) as {
       id: string;
       email: string;
       name: string;
@@ -402,499 +399,39 @@ export async function logout() {
   redirect('/login');
 }
 
+// ── Modular Re-Exports (Ensures 100% Backwards Compatibility) ────────────────
+// These functions are implemented in dedicated, single-responsibility modules:
+// - `app/actions/profile.ts`: Profile management & in-app security
+// - `app/actions/password-reset.ts`: Public password recovery flow
+// Next.js 16 requires explicit async function declarations in "use server" files.
+
+import * as profileModule from '@/app/actions/profile';
+import * as passwordResetModule from '@/app/actions/password-reset';
+
 export async function updateProfile(prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const { getSession } = await import('@/app/lib/auth');
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: 'Unauthorized: No active session' };
-  }
-
-  const name = formData.get('name')?.toString().trim();
-  const username = formData.get('username')?.toString().trim().toLowerCase();
-  const bio = formData.get('bio')?.toString().trim();
-  const dob = formData.get('dob')?.toString().trim();
-  const avatarUrl = formData.get('avatarUrl')?.toString().trim();
-  const website = formData.get('website')?.toString().trim();
-  const github = formData.get('github')?.toString().trim();
-  const linkedin = formData.get('linkedin')?.toString().trim();
-  const instagram = formData.get('instagram')?.toString().trim();
-  const xTwitter = formData.get('xTwitter')?.toString().trim();
-  const location = formData.get('location')?.toString().trim();
-  const rawSocialLinks = formData.get('socialLinks')?.toString().trim();
-
-  // Strict HTTPS URL validation helper
-  const validateHttpsUrl = (url: string): boolean => {
-    if (!url) return true;
-    const lower = url.toLowerCase().trim();
-    if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('file:') || lower.startsWith('vbscript:')) {
-      return false;
-    }
-    try {
-      const candidate = lower.startsWith('http://') || lower.startsWith('https://') ? lower : `https://${lower}`;
-      const parsed = new URL(candidate);
-      return parsed.protocol === 'https:' && parsed.hostname.includes('.');
-    } catch {
-      return false;
-    }
-  };
-
-  // Validate legacy social fields if provided
-  const socialFields = [website, github, linkedin, instagram, xTwitter].filter(Boolean) as string[];
-  for (const sf of socialFields) {
-    if (!validateHttpsUrl(sf)) {
-      return { success: false, error: 'Social links must be valid HTTPS URLs' };
-    }
-  }
-
-  // Validate dynamic socialLinks JSON if provided
-  let socialLinksJson: string | null = null;
-  if (rawSocialLinks) {
-    try {
-      const parsedList = JSON.parse(rawSocialLinks);
-      if (Array.isArray(parsedList)) {
-        for (const item of parsedList) {
-          if (item?.url && !validateHttpsUrl(item.url)) {
-            return { success: false, error: `Invalid URL for ${item.platform || 'social link'}. Only valid HTTPS URLs are permitted.` };
-          }
-        }
-        socialLinksJson = JSON.stringify(parsedList);
-      }
-    } catch {
-      // Invalid JSON string - ignore
-    }
-  }
-
-  if (!name || name.length < 2) {
-    return { success: false, error: 'Display name must be at least 2 characters long' };
-  }
-
-  if (username) {
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-      return { success: false, error: 'Username must be 3-30 characters and only contain letters, numbers, and underscores' };
-    }
-    const db = getDb();
-    const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?').get(username, session.userId);
-    if (existing) {
-      return { success: false, error: 'This username is already taken by another operator' };
-    }
-  }
-
-  if (dob) {
-    const birthDate = new Date(dob);
-    if (isNaN(birthDate.getTime())) {
-      return { success: false, error: 'Invalid Date of Birth format' };
-    }
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    if (age < 18) {
-      return { success: false, error: 'Age verification failed: Operator must be at least 18 years of age.' };
-    }
-  }
-
-  try {
-    const { updateUserProfile } = await import('@/app/lib/db');
-    const timestamp = now();
-    
-    // Generate new initials if name changed
-    const nameParts = name.split(' ');
-    const avatarInitials = nameParts.length > 1
-      ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
-      : name.substring(0, 2).toUpperCase();
-
-    updateUserProfile(session.userId, {
-      name,
-      avatarInitials,
-      username: username || null,
-      bio: bio || null,
-      dob: dob || null,
-      avatarUrl: avatarUrl || null,
-      website: website || null,
-      github: github || null,
-      linkedin: linkedin || null,
-      instagram: instagram || null,
-      xTwitter: xTwitter || null,
-      location: location || null,
-      socialLinks: socialLinksJson || null,
-      updatedAt: timestamp,
-    });
-
-    const db = getDb();
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'user.profile_update', ?, ?, 'user', ?, ?, ?)
-    `).run(generateId(), session.userId, name, session.userId, `${name} updated operator profile credentials`, timestamp);
-
-    // Refresh JWT session cookie
-    await createSession({
-      ...session,
-      name,
-      avatarInitials,
-      username: username || null,
-      avatarUrl: avatarUrl || null,
-    });
-
-    return { success: true, message: 'Operator profile updated successfully' };
-  } catch (error: any) {
-    console.error('Update profile error:', error);
-    return { success: false, error: error.message || 'Failed to update profile' };
-  }
+  return profileModule.updateProfile(prevState, formData);
 }
 
 export async function changePassword(prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const { getSession } = await import('@/app/lib/auth');
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: 'Unauthorized: Please sign in again.' };
-  }
-
-  const currentPassword = formData.get('currentPassword')?.toString() || '';
-  const newPassword = formData.get('newPassword')?.toString() || '';
-  const confirmPassword = formData.get('confirmPassword')?.toString() || '';
-
-  if (!currentPassword) {
-    return { success: false, error: 'Please enter your current password' };
-  }
-  if (!newPassword) {
-    return { success: false, error: 'Please enter a new password' };
-  }
-  if (newPassword !== confirmPassword) {
-    return { success: false, error: 'Passwords do not match' };
-  }
-
-  const policyCheck = passwordPolicySchema.safeParse(newPassword);
-  if (!policyCheck.success) {
-    return {
-      success: false,
-      error: policyCheck.error.issues[0]?.message || 'Password does not meet requirements',
-    };
-  }
-
-  const db = getDb();
-  const timestamp = now();
-  const user = getUserById(session.userId);
-  if (!user) {
-    return { success: false, error: 'Operator account could not be found' };
-  }
-
-  // 1. Verify current password server-side
-  const isCurrentValid = await verifyPassword(currentPassword, user.passwordHash);
-  if (!isCurrentValid) {
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_change_failed', ?, ?, 'user', ?, 'Invalid current password provided during password change attempt', ?)
-    `).run(generateId(), user.id, user.name, user.id, timestamp);
-
-    return { success: false, error: 'Current password is incorrect.' };
-  }
-
-  if (currentPassword === newPassword) {
-    return { success: false, error: 'New password cannot be the same as your current password.' };
-  }
-
-  try {
-    // 2. Hash new password with bcrypt salt cost 10
-    const newHash = await hashPassword(newPassword);
-
-    // 3. Atomically update database
-    updateUserPassword(user.id, newHash);
-
-    // 4. Invalidate outstanding reset tokens and challenges
-    invalidateAllUserResetTokens(user.id);
-    invalidateUserLoginChallenges(user.id);
-
-    // 5. Audit event: password_changed
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_changed', ?, ?, 'user', ?, 'Operator successfully changed account password from profile', ?)
-    `).run(generateId(), user.id, user.name, user.id, timestamp);
-
-    // 6. Refresh active session
-    await createSession({
-      ...session,
-    });
-
-    return { success: true, message: 'Password updated successfully.' };
-  } catch (err: any) {
-    console.error('[changePassword] Error:', err);
-    return { success: false, error: 'An unexpected error occurred. Please try again.' };
-  }
+  return profileModule.changePassword(prevState, formData);
 }
 
 export async function requestPasswordResetFromProfile(): Promise<ActionState> {
-  const { getSession } = await import('@/app/lib/auth');
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: 'Unauthorized: Please sign in again.' };
-  }
-
-  const user = getUserById(session.userId);
-  if (!user || !user.isActive) {
-    return {
-      success: true,
-      message: 'If an account exists for this email, a password reset link has been sent.',
-    };
-  }
-
-  const db = getDb();
-  const timestamp = now();
-
-  try {
-    // Generate secure reset token
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-
-    createPasswordResetToken(user.id, tokenHash, expiresAt);
-
-    const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
-
-    await sendPasswordResetEmail({
-      to: user.email,
-      resetUrl,
-      baseUrl: appUrl,
-    });
-
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_reset_requested_from_profile', ?, ?, 'user', ?, 'Operator requested password reset link from security profile', ?)
-    `).run(generateId(), user.id, user.name, user.id, timestamp);
-
-    return {
-      success: true,
-      message: 'If an account exists for this email, a password reset link has been sent.',
-    };
-  } catch (error: any) {
-    console.error('[requestPasswordResetFromProfile] Error:', error);
-    return {
-      success: true,
-      message: 'If an account exists for this email, a password reset link has been sent.',
-    };
-  }
-}
-
-// Rate limiting map: email -> timestamps[]
-const resetRateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_RESET_REQUESTS_PER_WINDOW = 5;
-
-function checkResetRateLimit(email: string): boolean {
-  const currentTime = Date.now();
-  const timestamps = resetRateLimitMap.get(email) || [];
-  const validTimestamps = timestamps.filter((t) => currentTime - t < RATE_LIMIT_WINDOW_MS);
-
-  if (validTimestamps.length >= MAX_RESET_REQUESTS_PER_WINDOW) {
-    resetRateLimitMap.set(email, validTimestamps);
-    return true; // rate limited
-  }
-
-  validTimestamps.push(currentTime);
-  resetRateLimitMap.set(email, validTimestamps);
-  return false;
+  return profileModule.requestPasswordResetFromProfile();
 }
 
 export async function forgotPassword(prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const rawEmail = formData.get('email');
-  if (!rawEmail || typeof rawEmail !== 'string') {
-    return { success: false, error: 'Please enter your email address' };
-  }
-
-  const normalizedEmail = rawEmail.trim().toLowerCase();
-  const emailSchema = z.string().email();
-  const result = emailSchema.safeParse(normalizedEmail);
-  if (!result.success) {
-    return { success: false, error: 'Please enter a valid email address' };
-  }
-
-  const genericResponse: ActionState = {
-    success: true,
-    message: 'If an account exists for that email, a password reset link has been sent.',
-  };
-
-  const db = getDb();
-  const timestamp = now();
-
-  // Rate limiting check
-  if (checkResetRateLimit(normalizedEmail)) {
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_reset_rate_limited', 'anonymous', 'system', 'security', ?, 'Rate limit reached for password reset requests', ?)
-    `).run(generateId(), normalizedEmail, timestamp);
-    return genericResponse;
-  }
-
-  // Safe user lookup (prevent account enumeration)
-  const user = db.prepare('SELECT id, email, name, isActive FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail) as {
-    id: string;
-    email: string;
-    name: string;
-    isActive: number;
-  } | undefined;
-
-  if (!user || !user.isActive) {
-    // Record anonymous audit event without revealing user status
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_reset_requested_unknown_email', 'anonymous', 'system', 'security', 'unregistered_target', 'Password reset requested for non-existent or inactive email', ?)
-    `).run(generateId(), timestamp);
-    return genericResponse;
-  }
-
-  try {
-    // 1. Generate high-entropy 256-bit cryptographic token (64 hex chars)
-    const rawToken = crypto.randomBytes(32).toString('hex');
-
-    // 2. Compute cryptographic SHA-256 hash for database storage
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    // 3. Expiry: 60 minutes
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-
-    // 4. Invalidate prior tokens and persist new token hash
-    createPasswordResetToken(user.id, tokenHash, expiresAt);
-
-    // 5. Construct secure reset URL using environment-configured base URL
-    const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
-
-    // 6. Dispatch transactional email
-    await sendPasswordResetEmail({
-      to: user.email,
-      resetUrl,
-      baseUrl: appUrl,
-    });
-
-    // 7. Audit log
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'password_reset_requested', ?, ?, 'user', ?, 'Password reset email dispatched to operator', ?)
-    `).run(generateId(), user.id, user.name, user.id, timestamp);
-
-    return genericResponse;
-  } catch (error: any) {
-    console.error('[forgotPassword] Error generating reset request:', error?.message || error);
-    return genericResponse;
-  }
+  return passwordResetModule.forgotPassword(prevState, formData);
 }
 
 export async function validateResetToken(rawToken: string | null | undefined): Promise<{
   valid: boolean;
   reason?: 'missing' | 'invalid_format' | 'used_or_invalid' | 'expired';
 }> {
-  if (!rawToken || typeof rawToken !== 'string') {
-    return { valid: false, reason: 'missing' };
-  }
-
-  const trimmed = rawToken.trim();
-  if (trimmed.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmed)) {
-    return { valid: false, reason: 'invalid_format' };
-  }
-
-  const tokenHash = crypto.createHash('sha256').update(trimmed).digest('hex');
-  const tokenRecord = getPasswordResetTokenByHash(tokenHash);
-
-  if (!tokenRecord || tokenRecord.usedAt !== null) {
-    return { valid: false, reason: 'used_or_invalid' };
-  }
-
-  if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
-    return { valid: false, reason: 'expired' };
-  }
-
-  return { valid: true };
+  return passwordResetModule.validateResetToken(rawToken);
 }
 
 export async function resetPassword(prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const token = formData.get('token');
-  const password = formData.get('password');
-  const confirmPassword = formData.get('confirmPassword');
-
-  if (!token || typeof token !== 'string') {
-    return { success: false, error: 'Invalid or missing reset token. Please request a new link.' };
-  }
-
-  if (!password || typeof password !== 'string') {
-    return { success: false, error: 'Please enter a new password' };
-  }
-
-  if (password !== confirmPassword) {
-    return { success: false, error: 'Passwords do not match' };
-  }
-
-  const passwordValidation = passwordPolicySchema.safeParse(password);
-  if (!passwordValidation.success) {
-    return {
-      success: false,
-      error: passwordValidation.error.issues[0]?.message || 'Password does not meet requirements',
-    };
-  }
-
-  const trimmedToken = token.trim();
-  if (trimmedToken.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmedToken)) {
-    return {
-      success: false,
-      error: 'This reset link is invalid or has already been used. Please request a new link.',
-    };
-  }
-
-  const tokenHash = crypto.createHash('sha256').update(trimmedToken).digest('hex');
-  const tokenRecord = getPasswordResetTokenByHash(tokenHash);
-
-  if (!tokenRecord || tokenRecord.usedAt !== null) {
-    return {
-      success: false,
-      error: 'This reset link is invalid or has already been used. Please request a new link.',
-    };
-  }
-
-  if (new Date(tokenRecord.expiresAt).getTime() < Date.now()) {
-    return {
-      success: false,
-      error: 'This reset link has expired. Please request a new link.',
-    };
-  }
-
-  const user = getUserById(tokenRecord.userId);
-  if (!user || !user.isActive) {
-    return {
-      success: false,
-      error: 'Operator account could not be found or is inactive.',
-    };
-  }
-
-  const db = getDb();
-  const timestamp = now();
-
-  // 1. Hash the new password using bcrypt cost 10
-  const hashedPassword = await hashPassword(password);
-
-  // 2. Transactionally update password and invalidate all tokens for user
-  updateUserPassword(user.id, hashedPassword);
-  markPasswordResetTokenUsed(tokenRecord.id);
-  invalidateAllUserResetTokens(user.id);
-
-  // 3. Security Audit Logging
-  db.prepare(`
-    INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-    VALUES (?, 'password_reset_completed', ?, ?, 'user', ?, 'Operator account password reset successfully completed', ?)
-  `).run(generateId(), user.id, user.name, user.id, timestamp);
-
-  // 4. Auto-login: Establish authenticated Sentinel session
-  await createSession({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    avatarInitials: user.avatarInitials,
-    workspaceId: user.workspaceId,
-    username: user.username,
-    avatarUrl: user.avatarUrl,
-  });
-
-  // 5. Seamless redirect directly to overview (no second manual login)
-  redirect('/overview');
+  return passwordResetModule.resetPassword(prevState, formData);
 }
+

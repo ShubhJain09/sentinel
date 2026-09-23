@@ -11,15 +11,15 @@ sequenceDiagram
     autonumber
     actor User as Operator Browser
     participant Page as app/(auth)/login/page.tsx
-    participant Action as app/actions/auth.ts (loginAction)
+    participant Action as app/actions/auth.ts (login)
     participant DB as app/lib/db.ts
     participant Mailer as app/lib/email.ts
     participant VerifyPage as app/(auth)/verify-login/page.tsx
-    participant VerifyAction as app/actions/auth.ts (verifyLoginChallengeAction)
+    participant VerifyAction as app/actions/auth.ts (verifyLoginOtp)
     participant Auth as app/lib/auth.ts (createSession)
 
     User->>Page: Submits email & password
-    Page->>Action: loginAction(formData)
+    Page->>Action: login(formData)
     Action->>DB: Query user by email (getUserByEmail)
     Action->>Action: verifyPassword(bcrypt.compare)
     Note over Action: If credentials valid, generate 6-digit OTP
@@ -28,10 +28,10 @@ sequenceDiagram
     Mailer-->>Action: Sent via Resend / SMTP / Local Outbox
     Action-->>User: Redirect to /verify-login?email=...
     User->>VerifyPage: Inputs 6-digit code
-    VerifyPage->>VerifyAction: verifyLoginChallengeAction(email, code)
-    VerifyAction->>DB: getLatestLoginChallenge(userId)
+    VerifyPage->>VerifyAction: verifyLoginOtp(email, code)
+    VerifyAction->>DB: getLoginChallenge(challengeId)
     VerifyAction->>VerifyAction: Verify OTP match & expiration (10 min)
-    VerifyAction->>DB: consumeLoginChallenge(challengeId)
+    VerifyAction->>DB: markLoginChallengeUsed(challengeId)
     VerifyAction->>Auth: createSession(userSession)
     Auth-->>User: Sets `sentinel-session` HTTP-only cookie
     VerifyAction-->>User: Redirect to /overview
@@ -39,7 +39,7 @@ sequenceDiagram
 
 - **Files Involved**:
   - Presentation: `app/(auth)/login/page.tsx`, `app/(auth)/verify-login/page.tsx`
-  - Mutation: `app/actions/auth.ts` (`loginAction`, `verifyLoginChallengeAction`)
+  - Mutation: `app/actions/auth.ts` (`login`, `verifyLoginOtp`)
   - Verification: `app/lib/auth.ts` (`verifyPassword`, `createSession`)
   - Notification: `app/lib/email.ts` (`sendLoginOtpEmail`)
   - Persistence: `app/lib/db.ts` (`login_challenges`, `audit_events`)
@@ -49,7 +49,7 @@ sequenceDiagram
 ## Flow 2: User Registration & Onboarding Flow
 
 1. **User Submission**: Visitor fills in name, email, password on `app/(auth)/signup/page.tsx`.
-2. **Server Action Invocation**: Calls `signupAction(formData)` in `app/actions/auth.ts`.
+2. **Server Action Invocation**: Calls `signup(formData)` in `app/actions/auth.ts`.
 3. **Validation**: Checks password complexity (min 8 characters, uppercase, lowercase, numbers, special characters) and confirms email uniqueness against `users` table.
 4. **Account Creation**: Hashes password using `bcrypt.hash(password, 10)`, assigns workspace ID, sets initial role to `'user'`, and persists record into `users` table.
 5. **Session Issuance**: Calls `createSession(...)` in `app/lib/auth.ts` to issue the `sentinel-session` HTTP-only cookie.
@@ -60,11 +60,11 @@ sequenceDiagram
 ## Flow 3: Password Reset Flow (Forgot Password -> Token -> Reset)
 
 1. **Initiation**: User visits `app/(auth)/forgot-password/page.tsx` and submits email.
-2. **Token Generation**: `forgotPasswordAction(email)` in `app/actions/auth.ts` checks user existence. Generates cryptographic token via `crypto.randomBytes(32).toString('hex')`.
+2. **Token Generation**: `forgotPassword(email)` in `app/actions/password-reset.ts` (re-exported via `app/actions/auth.ts`) checks user existence. Generates cryptographic token via `crypto.randomBytes(32).toString('hex')`.
 3. **Database Record**: Stores token with 1-hour expiry in `password_reset_tokens` table.
 4. **Email Dispatch**: `sendPasswordResetEmail(...)` in `app/lib/email.ts` formats transactional HTML with secure reset URL (`/reset-password?token=...`) and sends via active email provider (Resend, Postmark, SMTP, or local outbox).
 5. **Password Reset Page**: User clicks link to `app/(auth)/reset-password/page.tsx`.
-6. **Execution**: `resetPasswordAction(token, newPassword)` verifies token has not expired and has not been used (`usedAt IS NULL`), updates `passwordHash` in `users` table, marks token used, and logs `user.password_reset` to `audit_events`.
+6. **Execution**: `resetPassword(token, newPassword)` in `app/actions/password-reset.ts` verifies token has not expired and has not been used (`usedAt IS NULL`), updates `passwordHash` in `users` table, marks token used, and logs `user.password_reset` to `audit_events`.
 
 ---
 
@@ -72,7 +72,7 @@ sequenceDiagram
 
 1. **Modal Trigger**: Authenticated operator opens Security tab in `app/(app)/profile/page.tsx` and clicks "Change Password".
 2. **Submission**: Enters Current Password, New Password, and Confirm Password.
-3. **Server Action**: Calls `changePasswordFromProfileAction(formData)` in `app/actions/auth.ts`.
+3. **Server Action**: Calls `changePassword(formData)` in `app/actions/profile.ts` (re-exported via `app/actions/auth.ts`).
 4. **Identity Verification**:
    - Fetches active user via `getSession()`.
    - Compares supplied current password against `dbUser.passwordHash` using `bcrypt.compare`. If incorrect, throws `Current password is incorrect`.

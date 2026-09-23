@@ -101,6 +101,7 @@
 
 ### Layer 3: Server Actions & Backend Mutations
 - **Directory**: `app/actions/`
+- **Modular Structure**: Actions are partitioned into single-responsibility domains (`auth.ts` for core auth, `profile.ts` for operator profiles, `password-reset.ts` for account recovery, `scans.ts`, `approvals.ts`, `agents.ts`, `owner.ts`, `ai-workspace.ts`), with `auth.ts` maintaining backwards-compatible re-exports.
 - **Security Invariants**:
   - Every server action starts with `'use server'`.
   - **Session Validation**: Every action begins by calling `const session = await getSession(); if (!session) throw new Error('Unauthorized');`.
