@@ -32,7 +32,7 @@ export default function ActivityContent({ events }: { events: AuditEvent[] }) {
   });
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 pb-20">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 pb-20">
       <div>
         <span className="text-[10px] font-semibold tracking-wider text-[var(--accent-blue)] uppercase block mb-1">
           Audit Trail
@@ -48,7 +48,7 @@ export default function ActivityContent({ events }: { events: AuditEvent[] }) {
       <div className="bento-card overflow-hidden">
         {/* Filter & Search Bar */}
         <div className="p-3.5 border-b border-[var(--border-hairline)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-solid)]">
-          <div className="segmented-control">
+          <div className="segmented-control max-w-full overflow-x-auto no-scrollbar">
             {['All', 'Scans', 'Approvals', 'Findings', 'Auth'].map((tab) => (
               <button
                 key={tab}
@@ -120,7 +120,7 @@ export default function ActivityContent({ events }: { events: AuditEvent[] }) {
                       <span className="text-[13px] font-medium text-[var(--text-primary)]">
                         {e.detail}
                       </span>
-                      <span className="font-mono text-[11px] text-[var(--text-tertiary)] whitespace-nowrap tabular-numbers">
+                      <span className="font-mono text-[11px] text-[var(--text-tertiary)] whitespace-nowrap tabular-numbers" suppressHydrationWarning>
                         {new Date(e.createdAt).toLocaleString()}
                       </span>
                     </div>

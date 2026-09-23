@@ -259,11 +259,18 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status);
     CREATE INDEX IF NOT EXISTS idx_findings_scan_severity ON findings(scanId, severity);
     CREATE INDEX IF NOT EXISTS idx_findings_severity_status ON findings(severity, status);
+    CREATE INDEX IF NOT EXISTS idx_findings_created ON findings(createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_evidence_finding ON evidence(findingId);
+    CREATE INDEX IF NOT EXISTS idx_evidence_created ON evidence(createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_approvals_finding ON approvals(findingId);
     CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+    CREATE INDEX IF NOT EXISTS idx_approvals_created ON approvals(createdAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_remediations_finding ON remediations(findingId);
+    CREATE INDEX IF NOT EXISTS idx_remediations_approval ON remediations(approvalId);
+    CREATE INDEX IF NOT EXISTS idx_audit_events_created ON audit_events(createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_events_user_created ON audit_events(userId, createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(userId, read, createdAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_integrations_created ON integrations(createdAt ASC);
     CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspaceId);
     CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations(userId, updatedAt DESC);
     CREATE INDEX IF NOT EXISTS idx_connected_accounts_user ON connected_accounts(userId);

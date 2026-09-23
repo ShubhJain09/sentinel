@@ -286,7 +286,7 @@ export default function AgentsContent({ initialAgents, findings }: AgentsContent
                         <span>&bull;</span>
                         <span>{agent.capabilities.length} Declared Capabilities</span>
                         <span>&bull;</span>
-                        <span>
+                        <span suppressHydrationWarning>
                           Last Verified:{' '}
                           {new Date(agent.lastVerifiedAt).toLocaleDateString(undefined, {
                             month: 'short',

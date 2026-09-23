@@ -72,7 +72,7 @@ export function FindingDetailView({
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[var(--well)] text-[var(--text-secondary)]">
               {finding.classification}
             </span>
-            <span className="text-[12px] text-[var(--text-tertiary)]">
+            <span className="text-[12px] text-[var(--text-tertiary)]" suppressHydrationWarning>
               Detected {new Date(finding.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -397,7 +397,7 @@ export function FindingDetailView({
                 <span className="font-semibold text-[var(--text-primary)]">Detection event logged</span>
                 <span className="text-[var(--text-tertiary)] block text-[11px]">By automated runtime audit daemon</span>
               </div>
-              <span className="font-mono text-[var(--text-tertiary)]">{new Date(finding.createdAt).toLocaleTimeString()}</span>
+              <span className="font-mono text-[var(--text-tertiary)]" suppressHydrationWarning>{new Date(finding.createdAt).toLocaleTimeString()}</span>
             </div>
           </div>
         </div>

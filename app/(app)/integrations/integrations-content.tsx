@@ -160,7 +160,7 @@ export default function IntegrationsContent({ integrations, session }: Integrati
 
             <div className="pt-3 border-t border-[var(--border-hairline)] flex items-center justify-between text-[11px] text-[var(--text-tertiary)]">
               <span>Status: {item.status === 'connected' ? 'Operational' : 'Configuration Required'}</span>
-              <span className="font-mono tabular-numbers">
+              <span className="font-mono tabular-numbers" suppressHydrationWarning>
                 {item.lastActivity ? new Date(item.lastActivity).toLocaleDateString() : 'Active'}
               </span>
             </div>

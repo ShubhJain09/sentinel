@@ -55,7 +55,7 @@ export default async function OwnerAuditPage() {
             <tbody className="divide-y divide-[var(--border-subtle)]">
               {events.map((event) => (
                 <tr key={event.id} className="hover:bg-[var(--surface-secondary)]/30 transition-colors">
-                  <td className="py-3.5 px-6 font-mono tabular-nums text-[12px] text-[var(--text-tertiary)] whitespace-nowrap">
+                  <td className="py-3.5 px-6 font-mono tabular-nums text-[12px] text-[var(--text-tertiary)] whitespace-nowrap" suppressHydrationWarning>
                     {new Date(event.createdAt).toLocaleString()}
                   </td>
                   <td className="py-3.5 px-6">

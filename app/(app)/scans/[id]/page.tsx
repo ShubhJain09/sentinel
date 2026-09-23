@@ -75,7 +75,7 @@ export default async function ScanDetailPage({
           </div>
           <div>
             Executed:{' '}
-            <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            <span className="font-mono tabular-nums text-[var(--text-primary)]" suppressHydrationWarning>
               {new Date(scan.startedAt).toLocaleString()}
             </span>
           </div>

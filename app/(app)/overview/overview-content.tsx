@@ -56,10 +56,10 @@ export function OverviewContent({
       {/* ─── Top Greeting Header ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-hairline)] pb-6">
         <div className="space-y-1">
-          <h1 className="page-headline text-[var(--text-primary)]">
+          <h1 className="page-headline text-[var(--text-primary)]" suppressHydrationWarning>
             {greeting}, {firstName}.
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)] font-normal">
+          <p className="text-[13px] text-[var(--text-secondary)] font-normal" suppressHydrationWarning>
             {formattedDate} • Sentinel Security Enclave
           </p>
         </div>
@@ -315,7 +315,7 @@ export function OverviewContent({
                       <div className="text-[11.5px] text-[var(--text-tertiary)] flex items-center gap-2">
                         <span>{audit.userName || 'Security Daemon'}</span>
                         <span>•</span>
-                        <span className="font-mono">{new Date(audit.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="font-mono" suppressHydrationWarning>{new Date(audit.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
                   </div>

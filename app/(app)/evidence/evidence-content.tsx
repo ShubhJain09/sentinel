@@ -91,7 +91,7 @@ export default function EvidenceContent({ evidence, findings }: EvidenceProps) {
                     <span className="pill-badge bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)] border border-[var(--accent-blue-border)] font-mono text-[10px]">
                       {item.type}
                     </span>
-                    <span className="text-[11px] font-mono text-[var(--text-tertiary)] tabular-numbers">
+                    <span className="text-[11px] font-mono text-[var(--text-tertiary)] tabular-numbers" suppressHydrationWarning>
                       {new Date(item.createdAt).toLocaleString()}
                     </span>
                   </div>

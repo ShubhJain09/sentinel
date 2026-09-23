@@ -68,7 +68,7 @@ export default function ApprovalsContent({ approvals, findings, session }: Appro
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1300px] mx-auto space-y-6 pb-20">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1300px] mx-auto space-y-6 pb-20 min-w-0">
       {/* ── Top Header ────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-hairline)] pb-5">
         <div>
@@ -84,7 +84,7 @@ export default function ApprovalsContent({ approvals, findings, session }: Appro
         </div>
 
         {/* Filter segmented control */}
-        <div className="segmented-control self-start sm:self-auto">
+        <div className="segmented-control self-start sm:self-auto max-w-full overflow-x-auto no-scrollbar">
           {['All', 'Pending', 'Approved', 'Rejected'].map((tab) => (
             <button
               key={tab}
@@ -127,7 +127,7 @@ export default function ApprovalsContent({ approvals, findings, session }: Appro
             return (
               <div
                 key={approval.id}
-                className="bento-card p-6 md:p-8 space-y-6 transition-all"
+                className="bento-card p-4 sm:p-6 md:p-8 space-y-6 transition-all min-w-0 overflow-hidden"
               >
                 {/* Header row */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
@@ -160,7 +160,7 @@ export default function ApprovalsContent({ approvals, findings, session }: Appro
 
                   <div className="text-[11.5px] text-[var(--text-tertiary)] font-mono sm:text-right shrink-0">
                     <div>Target: <strong className="text-[var(--text-primary)] font-medium">{approval.affectedTarget}</strong></div>
-                    <div className="tabular-numbers">Requested: {new Date(approval.createdAt).toLocaleDateString()}</div>
+                    <div className="tabular-numbers" suppressHydrationWarning>Requested: {new Date(approval.createdAt).toLocaleDateString()}</div>
                   </div>
                 </div>
 
@@ -190,7 +190,7 @@ export default function ApprovalsContent({ approvals, findings, session }: Appro
                   <span className="text-[10px] font-semibold tracking-wider text-[var(--text-tertiary)] uppercase block">
                     Proposed Remediation Patch (AST Diff)
                   </span>
-                  <div className="well-inset p-4 font-mono text-[11.5px] overflow-x-auto whitespace-pre-wrap leading-relaxed tabular-numbers">
+                  <div className="well-inset p-3 sm:p-4 font-mono text-[11px] sm:text-[11.5px] overflow-x-auto break-all leading-relaxed tabular-numbers min-w-0">
                     <div className="text-[var(--status-critical)]">
                       - // Unvalidated direct read from tool parameter
                       <br />

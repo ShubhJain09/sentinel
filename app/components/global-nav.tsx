@@ -23,6 +23,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -37,6 +38,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
     setActiveMenu(null);
     setProfileOpen(false);
     setNotifOpen(false);
+    setMobileNavOpen(false);
   }, [pathname]);
 
   // Handle outside click
@@ -120,6 +122,8 @@ export function GlobalNav({ session }: GlobalNavProps) {
         setCmdOpen(false);
         setActiveMenu(null);
         setProfileOpen(false);
+        setNotifOpen(false);
+        setMobileNavOpen(false);
       } else if (cmdOpen) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
@@ -164,7 +168,7 @@ export function GlobalNav({ session }: GlobalNavProps) {
           </Link>
 
           {/* Desktop Nav Links with Trigger-Anchored Mega Menus */}
-          <nav className="hidden md:flex items-center gap-7 text-[13px] font-normal text-[var(--text-secondary)]">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-[13px] font-normal text-[var(--text-secondary)]">
             <Link
               href={session ? '/overview' : '/'}
               onMouseEnter={() => setActiveMenu(null)}
@@ -655,6 +659,21 @@ export function GlobalNav({ session }: GlobalNavProps) {
               {resolvedTheme === 'dark' ? <Icon name="sun" size={14} /> : <Icon name="moon" size={14} />}
             </button>
 
+            {/* Mobile Navigation Toggle (lg:hidden) */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('tap');
+                setMobileNavOpen((prev) => !prev);
+              }}
+              className="btn-icon w-8 h-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)] lg:hidden"
+              title={mobileNavOpen ? 'Close Navigation' : 'Open Navigation'}
+              aria-label={mobileNavOpen ? 'Close Navigation' : 'Open Navigation'}
+              aria-expanded={mobileNavOpen}
+            >
+              <Icon name={mobileNavOpen ? 'close' : 'menu'} size={15} />
+            </button>
+
             {/* Notifications (with interactive Liquid Glass popover panel) */}
             {session && (
               <div className="relative" ref={notifRef}>
@@ -1076,6 +1095,215 @@ export function GlobalNav({ session }: GlobalNavProps) {
                 <div className="p-8 text-center text-[13px] text-[var(--text-tertiary)]">
                   No matching Sentinel surfaces found.
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Navigation Drawer (lg:hidden) */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-md lg:hidden flex justify-end animate-fade"
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs sm:max-w-sm h-full bg-[var(--surface-solid)] border-l border-[var(--border-hairline)] p-5 overflow-y-auto space-y-6 flex flex-col justify-between shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-5">
+              {/* Header inside drawer */}
+              <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-3">
+                <SentinelLogo size={22} showWordmark={true} wordmarkClassName="text-[14px] font-semibold" />
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="btn-icon w-8 h-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  aria-label="Close menu"
+                >
+                  <Icon name="close" size={15} />
+                </button>
+              </div>
+
+              {/* Navigation groups */}
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                    Core Platform
+                  </span>
+                  <div className="space-y-0.5">
+                    <Link
+                      href={session ? '/overview' : '/'}
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="overview" size={15} className="text-[var(--accent-blue)]" />
+                      <span>{session ? 'Security Overview' : 'Product Home'}</span>
+                    </Link>
+                    <Link
+                      href="/agents"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="shield" size={15} className="text-[var(--accent-blue)]" />
+                      <span>Agents &amp; Passports</span>
+                    </Link>
+                    <Link
+                      href="/scans"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="scan" size={15} className="text-[var(--accent-blue)]" />
+                      <span>Scans &amp; Audits</span>
+                    </Link>
+                    <Link
+                      href="/findings"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="finding" size={15} className="text-[var(--status-critical)]" />
+                      <span>Findings</span>
+                    </Link>
+                    <Link
+                      href="/investigations"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="search" size={15} className="text-[var(--accent-blue)]" />
+                      <span>Investigations</span>
+                    </Link>
+                    <Link
+                      href="/evidence"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="box" size={15} className="text-[var(--text-tertiary)]" />
+                      <span>Evidence Vault</span>
+                    </Link>
+                    <Link
+                      href="/approvals"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="approval" size={15} className="text-[var(--status-warning)]" />
+                      <span>Approvals</span>
+                    </Link>
+                    <Link
+                      href="/remediation"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="check" size={15} className="text-[var(--status-safe)]" />
+                      <span>Remediation</span>
+                    </Link>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                    Intelligence &amp; Analytics
+                  </span>
+                  <div className="space-y-0.5">
+                    <Link
+                      href="/ai-workspace"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="code" size={15} className="text-[var(--accent-blue)]" />
+                      <span>AI Workspace</span>
+                    </Link>
+                    <Link
+                      href="/analytics"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="activity" size={15} className="text-[var(--accent-blue)]" />
+                      <span>Security Analytics</span>
+                    </Link>
+                    <Link
+                      href="/activity"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="clock" size={15} className="text-[var(--text-tertiary)]" />
+                      <span>Activity Trail</span>
+                    </Link>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] px-2 block mb-1">
+                    Documentation &amp; Support
+                  </span>
+                  <div className="space-y-0.5">
+                    <Link
+                      href="/support"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="sliders" size={15} className="text-[var(--accent-blue)]" />
+                      <span>Support Center</span>
+                    </Link>
+                    <Link
+                      href="/security"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                    >
+                      <Icon name="shield" size={15} className="text-[var(--status-safe)]" />
+                      <span>Security Architecture</span>
+                    </Link>
+                  </div>
+                </div>
+
+                {session?.role === 'owner' && (
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-2 block mb-1">
+                      Administration
+                    </span>
+                    <Link
+                      href="/owner"
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                    >
+                      <Icon name="shield" size={15} />
+                      <span>Owner Control Center</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom session area */}
+            <div className="pt-4 border-t border-[var(--border-hairline)] space-y-2">
+              {session ? (
+                <>
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                  >
+                    <Icon name="lock" size={15} className="text-[var(--text-tertiary)]" />
+                    <span>Profile &amp; Security</span>
+                  </Link>
+                  <form action="/api/auth/logout" method="POST">
+                    <button
+                      type="submit"
+                      onClick={() => triggerHaptic('tap')}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] text-[var(--status-critical)] hover:bg-[var(--status-critical-subtle)] text-left cursor-pointer"
+                    >
+                      <Icon name="close" size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="btn-primary w-full justify-center h-9 text-[13px]"
+                >
+                  Sign In
+                </Link>
               )}
             </div>
           </div>

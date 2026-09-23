@@ -56,7 +56,7 @@ export default async function WorkspacesPage() {
                 <div className="text-[12px] text-[var(--text-secondary)] flex items-center gap-2 font-mono tabular-nums">
                   <span>ID: {ws.id}</span>
                   <span>•</span>
-                  <span>Created {new Date(ws.createdAt).toLocaleDateString()}</span>
+                  <span suppressHydrationWarning>Created {new Date(ws.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>

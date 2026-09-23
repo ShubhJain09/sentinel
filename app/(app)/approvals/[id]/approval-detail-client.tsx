@@ -111,14 +111,14 @@ export function ApprovalDetailClient({
           </div>
           <div>
             Requested:{' '}
-            <span className="font-mono tabular-nums text-[var(--text-primary)]">
+            <span className="font-mono tabular-nums text-[var(--text-primary)]" suppressHydrationWarning>
               {new Date(approval.createdAt).toLocaleDateString()}
             </span>
           </div>
           {approval.reviewedAt && (
             <div>
               Reviewed:{' '}
-              <span className="font-mono tabular-nums text-[var(--text-primary)]">
+              <span className="font-mono tabular-nums text-[var(--text-primary)]" suppressHydrationWarning>
                 {new Date(approval.reviewedAt).toLocaleDateString()}
               </span>
             </div>

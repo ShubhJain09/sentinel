@@ -882,27 +882,27 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
     : (initialUser?.location || '');
 
   return (
-    <div className="p-6 lg:p-10 max-w-5xl mx-auto space-y-8 pb-28">
+    <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-8 pb-28 min-w-0 w-full">
       {/* ── Top Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-hairline)] pb-6">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-hairline)] pb-6 min-w-0">
+        <div className="min-w-0 flex-1">
           <span className="text-[10px] font-semibold tracking-wider text-[var(--accent-blue)] uppercase block mb-1">
             Account Management
           </span>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
+          <h1 className="text-2xl sm:text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
             Account &amp; Profile
           </h1>
-          <p className="text-[13.5px] text-[var(--text-secondary)] mt-1">
+          <p className="text-[13px] sm:text-[13.5px] text-[var(--text-secondary)] mt-1">
             Manage your personal identity, biometric passkeys, preferences, and active security sessions.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
           {session.role === 'owner' && (
             <Link
               href="/owner"
               onClick={() => triggerHaptic('selection')}
-              className="btn-primary"
+              className="btn-primary text-[12.5px] h-8.5 px-3.5"
             >
               <Icon name="shield" size={14} />
               <span>Owner Control Center</span>
@@ -936,7 +936,7 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
       )}
 
       {/* ── 4 Segmented Account Sections ────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--surface-solid)] border border-[var(--border-hairline)] max-w-md select-none">
+      <div className="flex items-center gap-1 p-1 rounded-2xl bg-[var(--surface-solid)] border border-[var(--border-hairline)] w-full max-w-full sm:max-w-md select-none overflow-x-auto no-scrollbar">
         {(['profile', 'security', 'preferences', 'sessions'] as const).map((tab) => (
           <button
             key={tab}
@@ -945,7 +945,7 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
               triggerHaptic('tap');
               setActiveTab(tab);
             }}
-            className={`flex-1 py-2 rounded-xl text-[12.5px] font-medium transition-all capitalize cursor-pointer ${
+            className={`flex-1 min-w-[70px] py-1.5 sm:py-2 rounded-xl text-[12px] sm:text-[12.5px] font-medium transition-all capitalize cursor-pointer text-center whitespace-nowrap ${
               activeTab === tab
                 ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] shadow-xs font-semibold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -957,11 +957,11 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
       </div>
 
       {/* ── TAB 1: Profile ──────────────────────────────────────────────────── */}
-      <div className={activeTab === 'profile' ? 'space-y-6 animate-fade' : 'hidden'}>
+      <div className={activeTab === 'profile' ? 'space-y-6 animate-fade min-w-0' : 'hidden'}>
           {/* Hero Profile Card */}
-          <div className="liquid-glass-card p-6 sm:p-8 rounded-[32px] border border-[var(--border-hairline)] space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <div className="flex items-center gap-5">
+          <div className="liquid-glass-card p-4 sm:p-6 lg:p-8 rounded-[28px] sm:rounded-[32px] border border-[var(--border-hairline)] space-y-6 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 min-w-0">
+              <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
                 {/* Avatar Display with Upload */}
                 <div className="relative group shrink-0">
                   {avatarUrl ? (
@@ -969,10 +969,10 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
                     <img
                       src={avatarUrl}
                       alt={name}
-                      className="w-20 h-20 rounded-2xl object-cover shadow-md border-2 border-[var(--border-hairline)]"
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-md border-2 border-[var(--border-hairline)]"
                     />
                   ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-[var(--accent-blue)] to-[#a3c7f4] flex items-center justify-center text-2xl font-bold text-white shadow-md border-2 border-[var(--border-hairline)]">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-[var(--accent-blue)] to-[#a3c7f4] flex items-center justify-center text-xl sm:text-2xl font-bold text-white shadow-md border-2 border-[var(--border-hairline)]">
                       {avatarInitials}
                     </div>
                   )}
@@ -999,13 +999,13 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
-                    <h2 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h2 className="text-lg sm:text-2xl font-semibold text-[var(--text-primary)] tracking-tight truncate max-w-full">
                       {name || 'Security Operator'}
                     </h2>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
                         session.role === 'owner'
                           ? 'bg-[var(--accent-blue-subtle)] text-[var(--accent-blue)]'
                           : 'bg-[var(--well)] text-[var(--text-secondary)]'
@@ -1015,18 +1015,18 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3 text-[13px]">
-                    <span className="font-mono text-[var(--accent-blue)] font-medium">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] sm:text-[13px] min-w-0">
+                    <span className="font-mono text-[var(--accent-blue)] font-medium shrink-0">
                       @{username || 'operator'}
                     </span>
-                    <span className="text-[var(--text-tertiary)]">•</span>
-                    <span className="font-mono text-[var(--text-secondary)]">{session.email}</span>
+                    <span className="text-[var(--text-tertiary)] shrink-0">•</span>
+                    <span className="font-mono text-[var(--text-secondary)] break-all truncate">{session.email}</span>
                   </div>
 
                   {displayLocation && (
-                    <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-tertiary)] pt-0.5">
-                      <Icon name="globe" size={13} />
-                      <span>{displayLocation}</span>
+                    <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-tertiary)] pt-0.5 min-w-0">
+                      <Icon name="globe" size={13} className="shrink-0" />
+                      <span className="truncate">{displayLocation}</span>
                     </div>
                   )}
                 </div>

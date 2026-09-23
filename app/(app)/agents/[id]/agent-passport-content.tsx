@@ -449,7 +449,7 @@ export default function AgentPassportContent({
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[var(--border-hairline)]">
                   <span className="text-[var(--text-secondary)]">Last Verification</span>
-                  <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
+                  <span className="font-mono text-[11px] text-[var(--text-tertiary)]" suppressHydrationWarning>
                     {new Date(agent.lastVerifiedAt).toLocaleDateString()}
                   </span>
                 </div>
@@ -851,7 +851,7 @@ export default function AgentPassportContent({
                 <p className="text-[12.5px] text-[var(--text-primary)] leading-relaxed">
                   {agent.driftDetails.diffSummary}
                 </p>
-                <p className="text-[11.5px] text-[var(--text-secondary)]">
+                <p className="text-[11.5px] text-[var(--text-secondary)]" suppressHydrationWarning>
                   Detected at: {new Date(agent.driftDetails.detectedAt).toLocaleString()}
                 </p>
               </div>

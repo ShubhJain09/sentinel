@@ -157,7 +157,7 @@ export function UsersClient({ users, session }: UsersClientProps) {
                       {u.isActive ? 'Active' : 'Suspended'}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-[12px] text-[var(--text-tertiary)] font-mono tabular-nums">
+                  <td className="py-4 px-6 text-[12px] text-[var(--text-tertiary)] font-mono tabular-nums" suppressHydrationWarning>
                     {new Date(u.createdAt).toLocaleDateString()}
                   </td>
                   <td className="py-4 px-6 text-right">

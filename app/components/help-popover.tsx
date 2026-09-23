@@ -26,10 +26,19 @@ export function HelpPopover({
         setOpen(false);
       }
     };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
     if (open) {
       document.addEventListener('mousedown', handleOutside);
+      window.addEventListener('keydown', handleKey);
     }
-    return () => document.removeEventListener('mousedown', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('keydown', handleKey);
+    };
   }, [open]);
 
   return (
@@ -44,12 +53,17 @@ export function HelpPopover({
         className="w-4 h-4 rounded-full bg-[var(--well)] hover:bg-[var(--surface-selected)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-hairline)] text-[10px] font-mono flex items-center justify-center transition-colors cursor-pointer ml-1 select-none"
         title="Contextual Help"
         aria-label={`Help: ${title}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
         ?
       </button>
 
       {open && (
         <div
+          role="dialog"
+          aria-modal="false"
+          aria-label={title}
           onClick={(e) => e.stopPropagation()}
           className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-3.5 liquid-glass-dropdown shadow-xl z-50 animate-fade text-left space-y-2 select-none"
         >
