@@ -1,0 +1,271 @@
+'use client';
+
+import { useActionState, useState, Suspense } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { login } from '@/app/actions/auth';
+import { SentinelLogo } from '@/app/components/sentinel-logo';
+import { Icon } from '@/app/components/ui-icon';
+import { triggerHaptic } from '@/app/lib/haptics';
+import { OAuthProviderButtons } from '@/app/components/oauth-provider-buttons';
+
+function getErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  switch (code) {
+    case 'google_not_configured':
+      return 'Google sign-in is not configured for this enclave.';
+    case 'apple_not_configured':
+      return 'Apple sign-in is not configured for this enclave.';
+    case 'invalid_oauth_state':
+      return 'OAuth state verification failed. Please try signing in again.';
+    case 'missing_oauth_code':
+      return 'OAuth authorization code was missing in callback response.';
+    case 'google_token_exchange_failed':
+      return 'Failed to exchange authorization code with Google.';
+    case 'google_userinfo_failed':
+      return 'Failed to retrieve profile information from Google.';
+    case 'google_email_missing':
+      return 'No email address was provided by Google account.';
+    case 'google_email_unverified':
+      return 'Your Google email address is unverified. Please verify your email with Google.';
+    case 'google_auth_failed':
+      return 'Authentication with Google failed. Please try again.';
+    case 'google_network_error':
+      return 'Network connectivity error contacting Google. Please check your connection or firewall.';
+    case 'apple_identity_incomplete':
+      return 'Apple ID returned incomplete identity payload.';
+    case 'apple_email_unverified':
+      return 'Your Apple ID email address could not be verified.';
+    case 'apple_auth_failed':
+      return 'Authentication with Apple failed. Please try again.';
+    default:
+      if (code.startsWith('google_access_denied')) return 'Sign in with Google was cancelled.';
+      return `Authentication error: ${code}`;
+  }
+}
+
+function LoginForm() {
+  const [state, action, pending] = useActionState(login, undefined);
+  const searchParams = useSearchParams();
+  const oauthErrorCode = searchParams.get('error');
+  const oauthErrorMessage = getErrorMessage(oauthErrorCode);
+
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+
+  const handlePasskeyAuth = async () => {
+    triggerHaptic('tap');
+    setPasskeyError(null);
+    setPasskeyLoading(true);
+
+    try {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        setPasskeyError('Your browser does not support the W3C Web Authentication API.');
+        setPasskeyLoading(false);
+        return;
+      }
+
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+      if (!available) {
+        setPasskeyError('No hardware biometric authenticator (Touch ID, Face ID, Windows Hello) detected.');
+        setPasskeyLoading(false);
+        return;
+      }
+
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          rpId: window.location.hostname,
+          userVerification: 'preferred',
+          timeout: 60000,
+        },
+      }).catch((err) => {
+        if (err.name === 'NotAllowedError') {
+          return null;
+        }
+        throw err;
+      });
+
+      if (!credential) {
+        setPasskeyLoading(false);
+        return;
+      }
+
+      triggerHaptic('selection');
+    } catch (err: any) {
+      console.warn('WebAuthn note:', err);
+      setPasskeyError('No paired passkey found. Sign in with your password to register one in Profile.');
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  return (
+    <div className="liquid-glass-card p-8 sm:p-10 rounded-[32px] shadow-2xl space-y-6 border border-white/80 dark:border-white/10 relative">
+      {/* Top Ribbon Symbol */}
+      <div className="flex flex-col items-center text-center space-y-3">
+        <div className="w-14 h-14 rounded-2xl bg-[var(--surface-solid)] flex items-center justify-center shadow-sm border border-[var(--border-hairline)]">
+          <SentinelLogo size={38} showWordmark={false} />
+        </div>
+        <div className="space-y-1">
+          <h1 className="text-[24px] font-semibold text-[var(--text-primary)] tracking-tight">
+            Sign in to Sentinel
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)]">
+            Autonomous agent security &amp; runtime containment
+          </p>
+        </div>
+      </div>
+
+      {/* Primary Form */}
+      <form action={action} className="space-y-4 pt-1">
+        {oauthErrorMessage && (
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[var(--status-critical-subtle)] border border-[var(--status-critical-border)] text-[var(--status-critical)] text-[12px] animate-fade">
+            <Icon name="finding" size={15} className="shrink-0" />
+            <span>{oauthErrorMessage}</span>
+          </div>
+        )}
+
+        {state?.error && (
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[var(--status-critical-subtle)] border border-[var(--status-critical-border)] text-[var(--status-critical)] text-[12px] animate-fade">
+            <Icon name="finding" size={15} className="shrink-0" />
+            <span>{state.error}</span>
+          </div>
+        )}
+
+        {passkeyError && (
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[var(--status-warning-subtle)] border border-[var(--status-warning-border)] text-[var(--status-warning)] text-[12px] animate-fade">
+            <Icon name="lock" size={15} className="shrink-0" />
+            <span>{passkeyError}</span>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-[12px] font-medium text-[var(--text-secondary)] block">
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="name@company.com"
+            defaultValue="workspaceshubhjain@gmail.com"
+            className="input-apple text-[13.5px] h-10 px-3.5 rounded-xl w-full"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-[12px] font-medium text-[var(--text-secondary)]">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-[11.5px] text-[var(--accent-blue)] hover:underline font-medium"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            placeholder="Enter account password"
+            defaultValue="SentinelDev2026!Secure"
+            className="input-apple text-[13.5px] h-10 px-3.5 rounded-xl w-full"
+          />
+        </div>
+
+        <div className="space-y-2.5 pt-2">
+          {/* Primary Submit */}
+          <button
+            type="submit"
+            disabled={pending}
+            onClick={() => triggerHaptic('tap')}
+            className="btn-primary w-full justify-center h-10.5 rounded-full text-[13.5px] font-medium cursor-pointer shadow-sm active:scale-[0.98]"
+          >
+            {pending ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <span>Signing in…</span>
+              </span>
+            ) : (
+              <span>Continue with Email</span>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="relative py-2 text-center select-none">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--border-hairline)]" />
+            </div>
+            <span className="relative px-3 bg-[var(--surface-solid)]/70 text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider backdrop-blur-xs rounded-full">
+              or authenticate with
+            </span>
+          </div>
+
+          {/* Sign In with Passkey (WebAuthn) */}
+          <button
+            type="button"
+            disabled={passkeyLoading}
+            onClick={handlePasskeyAuth}
+            className="w-full flex items-center justify-center gap-2 h-10 rounded-full bg-[var(--surface-solid)] border border-[var(--border-hairline)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] text-[13px] font-medium transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+          >
+            {passkeyLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-[var(--accent-blue)] border-t-transparent animate-spin" />
+                <span>Authenticating with Passkey…</span>
+              </span>
+            ) : (
+              <>
+                <Icon name="lock" size={14} className="text-[var(--accent-blue)]" />
+                <span>Sign in with Passkey</span>
+              </>
+            )}
+          </button>
+
+          {/* Social Provider Buttons */}
+          <OAuthProviderButtons className="pt-0.5" />
+        </div>
+      </form>
+
+      {/* Switcher link */}
+      <div className="pt-2 text-center border-t border-[var(--border-hairline)]">
+        <span className="text-[12px] text-[var(--text-tertiary)]">
+          Don&apos;t have an account?{' '}
+        </span>
+        <Link
+          href="/signup"
+          onClick={() => triggerHaptic('selection')}
+          className="text-[12px] font-semibold text-[var(--accent-blue)] hover:underline"
+        >
+          Create account →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="liquid-glass-card p-8 sm:p-10 rounded-[32px] shadow-2xl space-y-6 border border-white/80 dark:border-white/10 animate-pulse text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--surface-solid)] mx-auto flex items-center justify-center">
+            <SentinelLogo size={38} showWordmark={false} />
+          </div>
+          <div className="h-6 w-32 bg-[var(--surface-solid)] mx-auto rounded-full" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
