@@ -12,6 +12,7 @@ import {
   renameAiConversationAction,
   deleteAiConversationAction,
   shareAiConversationAction,
+  generateAiWorkspaceResponseAction,
 } from '@/app/actions/ai-workspace';
 
 interface ProviderMeta {
@@ -151,7 +152,7 @@ export default function WorkspaceContent({
     setMenuOpenId(null);
   };
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const query = textToSend || input;
     if (!query.trim() || isGenerating) return;
 
@@ -168,24 +169,25 @@ export default function WorkspaceContent({
     setInput('');
     setIsGenerating(true);
 
-    // Multi-stage agent synthesis
-    setTimeout(async () => {
-      triggerHaptic('success');
-      setIsGenerating(false);
-
+    try {
+      const generated = await generateAiWorkspaceResponseAction({
+        prompt: query,
+        messages: newMessages,
+      });
       const assistantMsg: AiChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `I have analyzed the request against Sentinel's security baseline. Here is the verified deterministic mitigation:`,
-        steps: [
-          'Interpreting request parameters and target telemetry…',
-          'Executing sandboxed static analysis on tool handlers…',
-          'Synthesizing minimal-privilege security patch…',
-          'Verifying compliance against NIST SP 800-53 / SOC-2…',
-        ],
-        diff: `// Fix for Boundary Escape & Tool Enclave\n+ import { resolvePathWithinBoundary } from '@/security/enclave';\n\n  async function handleToolExecution(userPath: string) {\n+   const resolved = resolvePathWithinBoundary(process.env.SANDBOX_ROOT, userPath);\n+   if (!resolved) throw new SecurityBoundaryError('Directory escape prevented');\n-   return fs.readFileSync(userPath, 'utf8');\n+   return fs.readFileSync(resolved, 'utf8');\n  }`,
+        content: generated.success && generated.content
+          ? generated.content
+          : generated.error || 'TrueForge is currently unavailable.',
+        steps: generated.steps,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
+
+      triggerHaptic(generated.success ? 'success' : 'warning');
+      if (!generated.success) {
+        setToast({ message: generated.error || 'TrueForge request failed', type: 'info' });
+      }
 
       const finalMessages = [...newMessages, assistantMsg];
       setMessages(finalMessages);
@@ -216,7 +218,9 @@ export default function WorkspaceContent({
           );
         }
       }
-    }, 1200);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // ── Rename Action ────────────────────────────────────────────────────────

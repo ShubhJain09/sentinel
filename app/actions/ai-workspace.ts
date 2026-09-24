@@ -14,6 +14,48 @@ import {
 } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { AiChatMessage, AiConversation } from '@/app/lib/types';
+import { getTrueForgeClient, isTrueForgeConfigured, TrueForgeError } from '@/app/lib/trueforge-client';
+
+export async function generateAiWorkspaceResponseAction(input: {
+  prompt: string;
+  messages: AiChatMessage[];
+}): Promise<{ success: boolean; content?: string; steps?: string[]; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized: Session required' };
+  const prompt = input.prompt?.trim();
+  if (!prompt || prompt.length > 12_000) return { success: false, error: 'Prompt must be between 1 and 12,000 characters.' };
+  if (!Array.isArray(input.messages) || input.messages.length > 50) return { success: false, error: 'Conversation context is invalid or too large.' };
+  if (!isTrueForgeConfigured()) return { success: false, error: 'TrueForge is not configured. Set TRUEFORGE_BASE_URL to enable live responses.' };
+
+  const history = input.messages.slice(-12).map(message => ({ role: message.role, content: message.content.slice(0, 4_000) }));
+  try {
+    const result = await getTrueForgeClient().runTurn(
+      'You are the Sentinel AI Security Workspace analyst. Provide defensive guidance grounded in supplied context. Never claim to execute tools, never run arbitrary commands, and never apply remediation. Proposed changes require human approval.',
+      `Conversation context:\n${JSON.stringify(history)}\n\nCurrent operator request:\n${prompt}`
+    );
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, metadata, createdAt)
+      VALUES (?, 'ai_workspace.response_generated', ?, ?, 'trueforge_turn', ?, ?, ?, ?)
+    `).run(generateId(), session.userId, session.name, result.metadata.turnId,
+      `TrueForge generated an AI Workspace response (${result.metadata.status})`,
+      JSON.stringify(result.metadata), now());
+    return {
+      success: true,
+      content: result.content,
+      steps: [
+        `TrueForge session ${result.metadata.sessionId}`,
+        `Model ${result.metadata.model}`,
+        `Turn completed in ${result.metadata.durationMs} ms`,
+        'Response is advisory; remediation still requires human approval.',
+      ],
+    };
+  } catch (error) {
+    const message = error instanceof TrueForgeError ? error.message : 'TrueForge could not generate a response.';
+    console.error('[AI Workspace] TrueForge request failed:', error instanceof Error ? error.message : 'Unknown error');
+    return { success: false, error: message };
+  }
+}
 
 export async function getAiConversationsAction(): Promise<{
   success: boolean;

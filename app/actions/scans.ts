@@ -2,7 +2,7 @@
 
 import { getSession } from '@/app/lib/auth';
 import { getDb, generateId, now } from '@/app/lib/db';
-import { getActiveProvider } from '@/app/lib/ai-provider';
+import { getActiveProvider, getProviderById } from '@/app/lib/ai-provider';
 import { hasPermission } from '@/app/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -56,7 +56,23 @@ export async function runNewScan(formData: FormData) {
   );
 
   // 3. Execute inspection through AI / Security Provider
-  const inspectionResult = await provider.runSecurityInspection(target, scope);
+  let inspectionResult;
+  try {
+    inspectionResult = await provider.runSecurityInspection(target, scope);
+  } catch (error) {
+    if (provider.id !== 'trueforge') throw error;
+    const fallback = getProviderById('sentinel-sandbox');
+    inspectionResult = await fallback.runSecurityInspection(target, scope);
+    db.prepare(`
+      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, metadata, createdAt)
+      VALUES (?, 'integration.trueforge_fallback', ?, ?, 'scan', ?, ?, ?, ?)
+    `).run(
+      generateId(), session.userId, session.name, scanId,
+      'TrueForge was unavailable; completed inspection with Sentinel Sandbox Engine.',
+      JSON.stringify({ provider: 'trueforge', fallbackProvider: fallback.id, error: error instanceof Error ? error.message : 'Unknown error' }),
+      now()
+    );
+  }
   const completedAt = now();
   const durationMs = inspectionResult.durationMs;
 
@@ -64,7 +80,7 @@ export async function runNewScan(formData: FormData) {
   for (const step of inspectionResult.steps) {
     db.prepare(`
       INSERT INTO evidence (id, findingId, type, title, content, source, isAiGenerated, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       generateId(),
       'SNT-001', // Link to core finding
@@ -72,6 +88,7 @@ export async function runNewScan(formData: FormData) {
       `${step.stage} - ${step.toolUsed}`,
       step.observation,
       `inspection-runner:${target.toLowerCase().replace(/\s+/g, '-')}`,
+      provider.id === 'trueforge' && inspectionResult.metadata ? 1 : 0,
       completedAt
     );
   }
@@ -90,14 +107,15 @@ export async function runNewScan(formData: FormData) {
 
   // 6. Log completion audit event
   db.prepare(`
-    INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-    VALUES (?, 'scan.completed', ?, ?, 'scan', ?, ?, ?)
+    INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, metadata, createdAt)
+    VALUES (?, 'scan.completed', ?, ?, 'scan', ?, ?, ?, ?)
   `).run(
     generateId(),
     session.userId,
     session.name,
     scanId,
     `Inspection completed on ${target}. Verdict: ${inspectionResult.verdict}`,
+    inspectionResult.metadata ? JSON.stringify(inspectionResult.metadata) : null,
     completedAt
   );
 

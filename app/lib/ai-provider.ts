@@ -1,4 +1,5 @@
 import type { Finding } from '@/app/lib/types';
+import { getTrueForgeClient, isTrueForgeConfigured, parseJsonObject } from '@/app/lib/trueforge-client';
 
 export interface AiAnalysisResult {
   providerId: string;
@@ -40,6 +41,7 @@ export interface InspectionResult {
   steps: InspectionStep[];
   findingsGenerated: number;
   verdict: 'passed' | 'needs_review' | 'failed';
+  metadata?: { sessionId: string; turnId: string; model: string; status: string };
 }
 
 export interface AiProvider {
@@ -63,57 +65,109 @@ class TrueForgeProvider implements AiProvider {
   capabilities = ['Live Agent Interception', 'Permission Guardrails', 'Real-time Telemetry'];
 
   get isConfigured(): boolean {
-    return Boolean(process.env.TRUEFORGE_API_KEY || process.env.TRUEFOUNDRY_API_KEY);
+    return isTrueForgeConfigured();
   }
 
   async analyzeFinding(finding: Finding): Promise<AiAnalysisResult> {
-    if (!this.isConfigured) {
-      throw new Error('TrueForge agent platform is not connected. Configure credentials in Settings.');
-    }
+    if (!this.isConfigured) throw new Error('TrueForge is not configured. Set TRUEFORGE_BASE_URL or a compatible API key.');
+    const result = await getTrueForgeClient().runTurn(
+      'You are a defensive security analyst. Analyze only the supplied finding. Do not execute commands or claim actions were performed. Return only valid JSON.',
+      `Return JSON with summary, riskAssessment, attackVector, recommendedMitigation, evidenceCitations (string array), and confidenceScore (0 to 1). Finding: ${JSON.stringify(finding)}`
+    );
+    const parsed = parseJsonObject(result.content);
     return {
       providerId: this.id,
       providerName: this.name,
-      summary: `Live TrueForge agent audit for ${finding.target}`,
-      riskAssessment: 'Critical boundary leakage observed at runtime.',
-      attackVector: 'Path traversal / out-of-bounds agent action',
-      confidenceScore: 0.94,
-      recommendedMitigation: finding.recommendation,
-      evidenceCitations: [finding.observed],
+      summary: requiredString(parsed.summary, 'summary'),
+      riskAssessment: requiredString(parsed.riskAssessment, 'riskAssessment'),
+      attackVector: requiredString(parsed.attackVector, 'attackVector'),
+      confidenceScore: boundedNumber(parsed.confidenceScore, 0, 1, 'confidenceScore'),
+      recommendedMitigation: requiredString(parsed.recommendedMitigation, 'recommendedMitigation'),
+      evidenceCitations: stringArray(parsed.evidenceCitations, 'evidenceCitations'),
     };
   }
 
   async proposeRemediation(finding: Finding): Promise<RemediationProposal> {
-    if (!this.isConfigured) {
-      throw new Error('TrueForge is not configured.');
-    }
+    if (!this.isConfigured) throw new Error('TrueForge is not configured.');
+    const result = await getTrueForgeClient().runTurn(
+      'You propose defensive remediations for human review. Never execute commands or apply changes. Return only valid JSON.',
+      `Return JSON with title, description, codeDiff {targetFile, removedLines, addedLines}, blastRadius (minimal, moderate, high), and verificationSteps for: ${JSON.stringify(finding)}`
+    );
+    const parsed = parseJsonObject(result.content);
+    const codeDiff = objectValue(parsed.codeDiff, 'codeDiff');
+    const blastRadius = requiredString(parsed.blastRadius, 'blastRadius');
+    if (!['minimal', 'moderate', 'high'].includes(blastRadius)) throw new Error('TrueForge returned an invalid blastRadius.');
     return {
       providerId: this.id,
       providerName: this.name,
-      title: `TrueForge Guardrail for ${finding.target}`,
-      description: 'Enforces hard sandbox filesystem and instruction isolation barriers.',
+      title: requiredString(parsed.title, 'title'),
+      description: requiredString(parsed.description, 'description'),
       codeDiff: {
-        targetFile: 'agent-boundary.config.json',
-        removedLines: ['"strictBoundary": false'],
-        addedLines: ['"strictBoundary": true', '"allowOutboundFs": false'],
+        targetFile: requiredString(codeDiff.targetFile, 'codeDiff.targetFile'),
+        removedLines: stringArray(codeDiff.removedLines, 'codeDiff.removedLines'),
+        addedLines: stringArray(codeDiff.addedLines, 'codeDiff.addedLines'),
       },
-      blastRadius: 'minimal',
-      verificationSteps: ['Retest boundary sandbox with out-of-scope fixtures'],
+      blastRadius: blastRadius as RemediationProposal['blastRadius'],
+      verificationSteps: stringArray(parsed.verificationSteps, 'verificationSteps'),
     };
   }
 
   async runSecurityInspection(target: string, scope: string[]): Promise<InspectionResult> {
-    if (!this.isConfigured) {
-      throw new Error('TrueForge is not configured.');
-    }
+    if (!this.isConfigured) throw new Error('TrueForge is not configured.');
+    const result = await getTrueForgeClient().runTurn(
+      'You are Sentinel\'s defensive security inspection agent. Analyze supplied context only. Never run shell commands, invoke tools, modify systems, or apply remediation. Return only valid JSON.',
+      `Analyze target ${JSON.stringify(target)} with scope ${JSON.stringify(scope)}. Return JSON: {"steps":[{"stage":"...","toolUsed":"analysis","status":"passed|failed|warning","observation":"...","timestamp":"ISO-8601"}],"findingsGenerated":0,"verdict":"passed|needs_review|failed"}. Do not fabricate executed tests.`
+    );
+    const parsed = parseJsonObject(result.content);
+    const steps = inspectionSteps(parsed.steps);
+    const verdict = requiredString(parsed.verdict, 'verdict');
+    if (!['passed', 'needs_review', 'failed'].includes(verdict)) throw new Error('TrueForge returned an invalid inspection verdict.');
     return {
       target,
-      environment: 'Live TrueForge Cluster',
-      durationMs: 3400,
-      steps: [],
-      findingsGenerated: 0,
-      verdict: 'passed',
+      environment: `TrueForge / ${result.metadata.model}`,
+      durationMs: result.metadata.durationMs,
+      steps,
+      findingsGenerated: boundedNumber(parsed.findingsGenerated, 0, 10_000, 'findingsGenerated'),
+      verdict: verdict as InspectionResult['verdict'],
+      metadata: result.metadata,
     };
   }
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`TrueForge response is missing ${field}.`);
+  return value.trim();
+}
+
+function boundedNumber(value: unknown, min: number, max: number, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) throw new Error(`TrueForge response has invalid ${field}.`);
+  return value;
+}
+
+function objectValue(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`TrueForge response has invalid ${field}.`);
+  return value as Record<string, unknown>;
+}
+
+function stringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new Error(`TrueForge response has invalid ${field}.`);
+  return value.map(item => item.trim()).filter(Boolean);
+}
+
+function inspectionSteps(value: unknown): InspectionStep[] {
+  if (!Array.isArray(value)) throw new Error('TrueForge response has invalid steps.');
+  return value.slice(0, 50).map((item, index) => {
+    const step = objectValue(item, `steps[${index}]`);
+    const status = requiredString(step.status, `steps[${index}].status`);
+    if (!['passed', 'failed', 'warning', 'in_progress'].includes(status)) throw new Error(`TrueForge response has invalid steps[${index}].status.`);
+    return {
+      stage: requiredString(step.stage, `steps[${index}].stage`),
+      toolUsed: requiredString(step.toolUsed, `steps[${index}].toolUsed`),
+      status: status as InspectionStep['status'],
+      observation: requiredString(step.observation, `steps[${index}].observation`),
+      timestamp: typeof step.timestamp === 'string' && !Number.isNaN(Date.parse(step.timestamp)) ? step.timestamp : new Date().toISOString(),
+    };
+  });
 }
 
 // ── 2. Groq Security Inference Provider ───────────────────────────────────────
@@ -375,6 +429,11 @@ export async function runTrueForgeInvestigation(
   scope: string[] = ['permissions', 'boundaries']
 ): Promise<InspectionResult> {
   const provider = getActiveProvider();
-  return provider.runSecurityInspection(target, scope);
+  try {
+    return await provider.runSecurityInspection(target, scope);
+  } catch (error) {
+    if (provider.id !== 'trueforge') throw error;
+    console.error('[TrueForge] Investigation failed; using Sentinel sandbox fallback:', error instanceof Error ? error.message : 'Unknown error');
+    return getProviderById('sentinel-sandbox').runSecurityInspection(target, scope);
+  }
 }
-
