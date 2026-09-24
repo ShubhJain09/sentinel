@@ -134,7 +134,7 @@ These are real captures from the local SENTINEL application using seeded demonst
 
 ### Prerequisites
 
-- Node.js 20 or newer recommended
+- Node.js 22 or newer (required by the current SQLite dependency)
 - npm 9 or newer
 
 ### Install and run
