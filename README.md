@@ -14,7 +14,7 @@ SENTINEL turns agent activity into inspectable evidence, findings, remediation p
 [![Checks](https://img.shields.io/badge/verification-50%20checks%20passing-22C55E)](#verification)
 [![License](https://img.shields.io/badge/license-proprietary-64748B)](#license)
 
-![SENTINEL glass wave artwork](public/sentinel-glass-wave.jpg)
+![SENTINEL — Beyond Trust](./sentinel-cover.PNG)
 
 </div>
 
