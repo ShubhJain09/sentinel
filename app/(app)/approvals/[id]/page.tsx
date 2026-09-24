@@ -17,7 +17,7 @@ export default async function ApprovalDetailPage({
   if (!session) redirect('/login');
 
   const { id } = await params;
-  const approval = getApprovalById(id);
+  const approval = getApprovalById(id, session.workspaceId);
 
   if (!approval) {
     notFound();

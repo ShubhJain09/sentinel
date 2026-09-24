@@ -21,7 +21,7 @@ export function OAuthProviderButtons({ className = '' }: { className?: string })
         setProviders({
           google: { configured: false, clientIdMasked: null },
           apple: { configured: false, clientIdMasked: null, teamIdMasked: null },
-          passkey: { available: true, standard: 'FIDO2' },
+          passkey: { available: false, standard: 'FIDO2' },
           password: { enabled: true, algorithm: 'bcrypt' },
         });
       });

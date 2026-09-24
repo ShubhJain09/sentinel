@@ -3,20 +3,20 @@
 import { useState } from 'react';
 import { Icon } from '@/app/components/ui-icon';
 import { inviteUser, updateUserRole, toggleUserStatus, terminateUser } from '@/app/actions/owner';
-import type { User, UserRole, Session } from '@/app/lib/types';
+import type { SafeUser, UserRole, Session } from '@/app/lib/types';
 import { canSuspendUser, canTerminateUser, canManageUserRole } from '@/app/lib/permissions';
 import { triggerHaptic } from '@/app/lib/haptics';
 import Link from 'next/link';
 
 interface UsersClientProps {
-  users: User[];
+  users: SafeUser[];
   session: Session;
 }
 
 export function UsersClient({ users, session }: UsersClientProps) {
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ tempPassword?: string } | null>(null);
-  const [terminatingUser, setTerminatingUser] = useState<User | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ message: string } | null>(null);
+  const [terminatingUser, setTerminatingUser] = useState<SafeUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -30,7 +30,7 @@ export function UsersClient({ users, session }: UsersClientProps) {
       const res = await inviteUser(formData);
       if (res.success) {
         triggerHaptic('success');
-        setInviteResult({ tempPassword: res.tempPassword });
+        setInviteResult({ message: res.message || 'Invitation created. The user must set a password through the secure email link.' });
         setToast({ type: 'success', message: 'User invited successfully' });
       } else {
         triggerHaptic('warning');
@@ -295,10 +295,7 @@ export function UsersClient({ users, session }: UsersClientProps) {
               <div className="space-y-4 py-2">
                 <div className="p-4 rounded-2xl bg-[var(--status-safe-subtle)] border border-[var(--status-safe-border)] text-[12px] space-y-2">
                   <div className="font-semibold text-[var(--status-safe)]">User provisioned successfully!</div>
-                  <div className="text-[var(--text-secondary)]">Initial temporary password:</div>
-                  <code className="block p-2.5 rounded-xl well-inset font-mono text-[var(--text-primary)] select-all tabular-nums">
-                    {inviteResult.tempPassword}
-                  </code>
+                  <div className="text-[var(--text-secondary)]">{inviteResult.message}</div>
                 </div>
                 <button
                   onClick={() => {

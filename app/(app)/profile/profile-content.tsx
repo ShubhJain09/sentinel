@@ -7,7 +7,7 @@ import { Icon } from '@/app/components/ui-icon';
 import { triggerHaptic } from '@/app/lib/haptics';
 import { useTheme } from '@/app/components/theme-provider';
 import { updateProfile } from '@/app/actions/auth';
-import type { Session } from '@/app/lib/types';
+import type { Session, UserProfileDto } from '@/app/lib/types';
 import { ChangePasswordModal } from './change-password-modal';
 
 // ── Country + City Data ──────────────────────────────────────────────
@@ -100,7 +100,7 @@ function validateSocialUrl(url: string): boolean {
 }
 
 // Parse existing profile social data into SocialLink[] format
-function parseLegacySocials(user: any): SocialLink[] {
+function parseLegacySocials(user?: UserProfileDto): SocialLink[] {
   if (user?.socialLinks) {
     try {
       const parsed = typeof user.socialLinks === 'string' ? JSON.parse(user.socialLinks) : user.socialLinks;
@@ -503,7 +503,7 @@ function SearchableSelect({
 // ── Main Profile Content ─────────────────────────────────────────────
 interface ProfileContentProps {
   session: Session;
-  initialUser?: any;
+  initialUser?: UserProfileDto;
 }
 
 export default function ProfileContent({ session, initialUser }: ProfileContentProps) {
@@ -560,9 +560,7 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
-  // Passkey & Security state
-  const [passkeyRegistered, setPasskeyRegistered] = useState(false);
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  // Security state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Connected Accounts state
@@ -778,69 +776,6 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
         setToast({ type: 'error', message: res?.error || 'Failed to update profile' });
       }
     });
-  };
-
-  const handleRegisterPasskey = async () => {
-    triggerHaptic('tap');
-    setPasskeyLoading(true);
-    setToast(null);
-
-    try {
-      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-        setToast({
-          type: 'error',
-          message: 'WebAuthn is not supported in this browser environment.',
-        });
-        setPasskeyLoading(false);
-        return;
-      }
-
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-      const userIdBytes = new TextEncoder().encode(session.userId);
-
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge,
-          rp: { name: 'Sentinel Security Enclave', id: window.location.hostname },
-          user: {
-            id: userIdBytes,
-            name: session.email,
-            displayName: name || session.name,
-          },
-          pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-          authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            userVerification: 'preferred',
-          },
-          timeout: 60000,
-        },
-      }).catch((err) => {
-        if (err.name === 'NotAllowedError') return null;
-        throw err;
-      });
-
-      if (credential) {
-        triggerHaptic('selection');
-        setPasskeyRegistered(true);
-        setToast({
-          type: 'success',
-          message: 'Passkey registered successfully. You can now use Touch ID / Face ID to sign in.',
-        });
-      } else {
-        setToast({
-          type: 'success',
-          message: 'Passkey registration prompt ready. Ensure your biometric sensor is unlocked.',
-        });
-      }
-    } catch (err: any) {
-      setToast({
-        type: 'error',
-        message: err.message || 'Passkey enrollment encountered an error.',
-      });
-    } finally {
-      setPasskeyLoading(false);
-    }
   };
 
   const handleDisconnectProvider = async (provider: 'google' | 'apple') => {
@@ -1503,21 +1438,9 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
               </p>
             </div>
 
-            <button
-              type="button"
-              disabled={passkeyLoading}
-              onClick={handleRegisterPasskey}
-              className="btn-primary text-[13px] h-10 px-5 self-start sm:self-auto cursor-pointer"
-            >
-              {passkeyLoading ? (
-                <span>Prompting Device…</span>
-              ) : (
-                <>
-                  <Icon name="lock" size={14} />
-                  <span>Register New Passkey</span>
-                </>
-              )}
-            </button>
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[var(--well)] text-[var(--text-secondary)] border border-[var(--border-hairline)]">
+              NOT CONFIGURED
+            </span>
           </div>
 
           <div className="space-y-3">
@@ -1528,24 +1451,16 @@ export default function ProfileContent({ session, initialUser }: ProfileContentP
                 </div>
                 <div>
                   <div className="font-semibold text-[var(--text-primary)]">
-                    {passkeyRegistered ? 'Apple Touch ID / Platform Authenticator' : 'Hardware Security Module Ready'}
+                    Passkey authentication unavailable
                   </div>
                   <div className="text-[11.5px] text-[var(--text-tertiary)]">
-                    {passkeyRegistered
-                      ? 'Enrolled on this device • Synced via iCloud Keychain'
-                      : 'No passkeys currently active on this operator profile'}
+                    Server-side WebAuthn verification and credential storage are not configured.
                   </div>
                 </div>
               </div>
 
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  passkeyRegistered
-                    ? 'bg-[var(--status-safe-subtle)] text-[var(--status-safe)]'
-                    : 'bg-[var(--well)] text-[var(--text-secondary)]'
-                }`}
-              >
-                {passkeyRegistered ? 'ACTIVE' : 'READY'}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--well)] text-[var(--text-secondary)]">
+                DISABLED
               </span>
             </div>
           </div>

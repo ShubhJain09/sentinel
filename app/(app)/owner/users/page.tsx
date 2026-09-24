@@ -14,7 +14,7 @@ export default async function UsersPage() {
     redirect('/overview');
   }
 
-  const users = getAllUsers();
+  const users = getAllUsers(session.role === 'owner' ? undefined : session.workspaceId);
 
   return <UsersClient users={users} session={session} />;
 }

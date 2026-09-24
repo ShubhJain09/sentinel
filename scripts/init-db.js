@@ -254,8 +254,14 @@ console.log('Tables created successfully.');
 const now = new Date().toISOString();
 const defaultWorkspaceId = 'default-workspace-id';
 const ownerUserId = 'owner-user-id';
-const ownerEmail = (process.env.OWNER_EMAIL || 'owner@sentinel.security').toLowerCase();
-const ownerInitialPassword = process.env.OWNER_INITIAL_PASSWORD || 'SentinelOwner2026!';
+const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+const ownerInitialPassword = process.env.OWNER_INITIAL_PASSWORD;
+
+if (!ownerEmail || !ownerInitialPassword) {
+  db.close();
+  console.log('Database schema initialized. No account or demo data was seeded.');
+  process.exit(0);
+}
 
 // Seed workspace
 const wsCount = db.prepare('SELECT COUNT(*) as count FROM workspaces').get().count;
@@ -277,7 +283,7 @@ if (userCount === 0) {
     INSERT INTO users (id, email, name, passwordHash, role, avatarInitials, workspaceId, createdAt, updatedAt, isActive)
     VALUES (?, ?, 'Sentinel Platform Owner', ?, 'owner', 'SO', ?, ?, ?, 1)
   `).run(ownerUserId, ownerEmail, hash, defaultWorkspaceId, now, now);
-  console.log(`Seeded platform owner: ${ownerEmail}`);
+  console.log('Seeded configured platform owner.');
 
   // Seed default settings
   db.prepare(`

@@ -179,7 +179,7 @@ export default function OnboardingProfilePage() {
                     autoFocus
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                    placeholder="shubh"
+                    placeholder="operator"
                     maxLength={24}
                     className="w-full pl-8 pr-3.5 py-2.5 rounded-xl bg-[var(--well)] border border-[var(--well-border)] text-[13px] text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-blue)]"
                   />

@@ -13,7 +13,7 @@ export default async function RetestsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const allScans = getAllScans();
+  const allScans = getAllScans(session.workspaceId);
   const retests = allScans.filter(
     (s) => s.kind.toLowerCase().includes('retest') || s.name.toLowerCase().includes('retest')
   );

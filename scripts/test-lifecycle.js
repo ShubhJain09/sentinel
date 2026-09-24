@@ -11,11 +11,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const bcrypt = require('bcryptjs');
 const db = require('better-sqlite3')(path.join(__dirname, '..', 'sentinel.db'));
 const { SignJWT, jwtVerify } = require('jose');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sentinel-dev-secret-key-change-in-production-32chars';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) throw new Error('JWT_SECRET is required');
 const encodedKey = new TextEncoder().encode(JWT_SECRET);
 
 function request(options, body) {
@@ -47,16 +47,12 @@ function request(options, body) {
 async function testFullLifecycle() {
   console.log('=== SENTINEL FULL LIFECYCLE AUDIT (LOGIN -> NAV -> LOGOUT -> RE-LOGIN) ===\n');
 
-  const email = 'workspaceshubhjain@gmail.com';
-  const password = 'SentinelOwner2026!';
-
-  // Step 1: Verify User in DB & Password Hash
-  console.log('[Step 1] Verifying user credentials against database...');
-  const user = db.prepare('SELECT * FROM users WHERE email = ? AND isActive = 1').get(email);
-  if (!user) throw new Error(`User ${email} not found in database!`);
-  const isMatch = bcrypt.compareSync(password, user.passwordHash);
-  if (!isMatch) throw new Error('Password mismatch!');
-  console.log(`  ✓ Credentials verified for ${user.name} <${user.email}> (role: ${user.role})`);
+  // Step 1: Resolve an active test account without embedding or printing credentials.
+  console.log('[Step 1] Resolving active test account...');
+  const user = db.prepare("SELECT * FROM users WHERE role = 'owner' AND isActive = 1 ORDER BY createdAt ASC LIMIT 1").get();
+  if (!user) throw new Error('No active owner account found for lifecycle test.');
+  if (!user.passwordHash?.startsWith('$2')) throw new Error('Test account does not have a bcrypt password hash.');
+  console.log('  ✓ Active account record and bcrypt hash verified');
 
   // Step 2: Create Authenticated Session Token
   console.log('\n[Step 2] Establishing authenticated session...');
@@ -69,6 +65,8 @@ async function testFullLifecycle() {
     workspaceId: user.workspaceId,
   })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('sentinel')
+    .setAudience('sentinel-session')
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(encodedKey);
@@ -156,6 +154,8 @@ async function testFullLifecycle() {
     workspaceId: user.workspaceId,
   })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('sentinel')
+    .setAudience('sentinel-session')
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(encodedKey);

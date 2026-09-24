@@ -16,6 +16,22 @@ export default async function ProfilePage() {
   }
 
   const user = getUserById(session.userId);
+  const profile = user
+    ? {
+        name: user.name,
+        username: user.username,
+        bio: user.bio,
+        dob: user.dob,
+        avatarUrl: user.avatarUrl,
+        website: user.website,
+        github: user.github,
+        linkedin: user.linkedin,
+        instagram: user.instagram,
+        xTwitter: user.xTwitter,
+        location: user.location,
+        socialLinks: user.socialLinks,
+      }
+    : undefined;
 
-  return <ProfileContent session={session} initialUser={user} />;
+  return <ProfileContent session={session} initialUser={profile} />;
 }

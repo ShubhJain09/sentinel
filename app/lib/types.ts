@@ -27,6 +27,24 @@ export interface User {
   isOnboarded?: boolean;
 }
 
+export type SafeUser = Omit<User, 'passwordHash'>;
+
+export type UserProfileDto = Pick<
+  User,
+  | 'name'
+  | 'username'
+  | 'bio'
+  | 'dob'
+  | 'avatarUrl'
+  | 'website'
+  | 'github'
+  | 'linkedin'
+  | 'instagram'
+  | 'xTwitter'
+  | 'location'
+  | 'socialLinks'
+>;
+
 // Session
 export interface Session {
   userId: string;
@@ -351,4 +369,3 @@ export interface AiConversation {
   createdAt: string;
   updatedAt: string;
 }
-

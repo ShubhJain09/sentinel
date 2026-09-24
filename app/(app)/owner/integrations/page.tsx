@@ -13,7 +13,7 @@ export default async function OwnerIntegrationsPage() {
     redirect('/overview');
   }
 
-  const integrations = getAllIntegrations();
+  const integrations = getAllIntegrations(session.workspaceId);
 
   return <OwnerIntegrationsClient integrations={integrations} />;
 }

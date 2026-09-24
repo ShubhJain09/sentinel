@@ -15,8 +15,8 @@ export default async function AgentsPage() {
     redirect('/login');
   }
 
-  const agents = getAllAgents();
-  const findings = getAllFindings();
+  const agents = getAllAgents(session.workspaceId);
+  const findings = getAllFindings(session.workspaceId);
 
   return <AgentsContent session={session} initialAgents={agents} findings={findings} />;
 }

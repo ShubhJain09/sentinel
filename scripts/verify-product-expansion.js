@@ -87,11 +87,11 @@ async function runTests() {
       logFail(`Users table is missing columns: ${missingCols.join(', ')}`);
     }
 
-    const owner = db.prepare("SELECT * FROM users WHERE email = 'workspaceshubhjain@gmail.com'").get();
-    if (owner && owner.username === 'shubh' && owner.dob === '1998-04-15') {
-      logPass(`Owner profile verified with @${owner.username}, DOB: ${owner.dob}, location: ${owner.location}`);
+    const owner = db.prepare("SELECT * FROM users WHERE role = 'owner' ORDER BY createdAt ASC LIMIT 1").get();
+    if (owner) {
+      logPass('Owner profile record is present without relying on a hardcoded identity.');
     } else {
-      logFail(`Owner profile not properly seeded: ${JSON.stringify(owner)}`);
+      logFail('Owner profile record is missing.');
     }
 
     const agents = db.prepare("SELECT * FROM agents").all();
@@ -127,20 +127,23 @@ async function runTests() {
 
     // Direct token creation for test suite using jose
     const { SignJWT } = require('jose');
-    const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+    const secretKey = process.env.JWT_SECRET;
+    if (!secretKey || secretKey.length < 32) throw new Error('JWT_SECRET is required for authentication tests');
     const encodedKey = new TextEncoder().encode(secretKey);
 
     const token = await new SignJWT({
-      userId: 'owner-user-id',
-      email: 'workspaceshubhjain@gmail.com',
-      name: 'Shubh Jain',
-      role: 'owner',
-      avatarInitials: 'SJ',
-      workspaceId: 'default-workspace-id',
-      username: 'shubh',
-      avatarUrl: null,
+      userId: owner.id,
+      email: owner.email,
+      name: owner.name,
+      role: owner.role,
+      avatarInitials: owner.avatarInitials,
+      workspaceId: owner.workspaceId,
+      username: owner.username,
+      avatarUrl: owner.avatarUrl,
     })
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('sentinel')
+      .setAudience('sentinel-session')
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(encodedKey);
@@ -190,7 +193,7 @@ async function runTests() {
     {
       path: '/profile',
       name: 'Operator Profile Editor',
-      expectContent: ['Operator Profile', 'shubh', 'Identity Verification Status', 'Display &amp; Appearance'],
+      expectContent: ['Operator Profile', 'Identity Verification Status', 'Display &amp; Appearance'],
     },
     {
       path: '/onboarding/profile',

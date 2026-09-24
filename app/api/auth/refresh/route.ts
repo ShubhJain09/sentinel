@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
 import { getUserById } from '@/app/lib/db';
+import { getConfiguredOwnerEmails, getSessionSigningKey } from '@/app/lib/auth';
 import type { UserRole } from '@/app/lib/types';
-
-const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
-const encodedKey = new TextEncoder().encode(secretKey);
 
 export async function GET(request: NextRequest) {
   const sessionToken = request.cookies.get('sentinel-session')?.value;
@@ -20,8 +18,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(sessionToken, encodedKey, {
+    const { payload } = await jwtVerify(sessionToken, getSessionSigningKey(), {
       algorithms: ['HS256'],
+      issuer: 'sentinel',
+      audience: 'sentinel-session',
     });
 
     const userId = payload.userId as string;
@@ -38,10 +38,7 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-      .toLowerCase()
-      .split(',')
-      .map((e) => e.trim());
+    const ownerEmails = getConfiguredOwnerEmails();
 
     let liveRole: UserRole = dbUser.role;
     if (dbUser.email && ownerEmails.includes(dbUser.email.toLowerCase())) {
@@ -50,22 +47,15 @@ export async function GET(request: NextRequest) {
 
     // Re-sign fresh 7-day token
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const updatedPayload = {
-      userId: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: liveRole,
-      avatarInitials: dbUser.avatarInitials,
-      workspaceId: dbUser.workspaceId,
-      username: dbUser.username,
-      avatarUrl: dbUser.avatarUrl,
-    };
+    const updatedPayload = { userId: dbUser.id, role: liveRole };
 
     const newToken = await new SignJWT(updatedPayload as any)
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('sentinel')
+      .setAudience('sentinel-session')
       .setIssuedAt()
       .setExpirationTime('7d')
-      .sign(encodedKey);
+      .sign(getSessionSigningKey());
 
     // Validate access to safeTarget
     let finalDestination = safeTarget;

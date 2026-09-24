@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { decodeJwt } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { handleOAuthLogin } from '@/app/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+const appleJwks = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 
 function getBaseUrl(request: NextRequest): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
@@ -27,7 +29,10 @@ async function processAppleAuth(
 
   if (params.error) {
     loginUrl.searchParams.set('error', `apple_${params.error}`);
-    return NextResponse.redirect(loginUrl);
+    const res = NextResponse.redirect(loginUrl);
+    res.cookies.delete('sentinel_apple_oauth_state');
+    res.cookies.delete('sentinel_apple_oauth_nonce');
+    return res;
   }
 
   const storedState = request.cookies.get('sentinel_apple_oauth_state')?.value;
@@ -35,6 +40,7 @@ async function processAppleAuth(
     loginUrl.searchParams.set('error', 'invalid_oauth_state');
     const res = NextResponse.redirect(loginUrl);
     res.cookies.delete('sentinel_apple_oauth_state');
+    res.cookies.delete('sentinel_apple_oauth_nonce');
     return res;
   }
 
@@ -42,25 +48,33 @@ async function processAppleAuth(
     loginUrl.searchParams.set('error', 'missing_apple_token');
     const res = NextResponse.redirect(loginUrl);
     res.cookies.delete('sentinel_apple_oauth_state');
+    res.cookies.delete('sentinel_apple_oauth_nonce');
     return res;
   }
 
   try {
-    // Decode Apple ID Token
-    const payload = decodeJwt(params.id_token);
-
-    if (payload.iss !== 'https://appleid.apple.com') {
-      loginUrl.searchParams.set('error', 'invalid_apple_issuer');
+    const appleClientId = process.env.APPLE_CLIENT_ID?.trim();
+    const storedNonce = request.cookies.get('sentinel_apple_oauth_nonce')?.value;
+    if (!appleClientId || !storedNonce) {
+      loginUrl.searchParams.set('error', 'apple_not_configured');
       const res = NextResponse.redirect(loginUrl);
       res.cookies.delete('sentinel_apple_oauth_state');
+      res.cookies.delete('sentinel_apple_oauth_nonce');
       return res;
     }
 
-    const appleClientId = process.env.APPLE_CLIENT_ID?.trim();
-    if (appleClientId && payload.aud !== appleClientId) {
-      loginUrl.searchParams.set('error', 'invalid_apple_audience');
+    // Verify the token signature against Apple's JWKS, plus issuer, audience,
+    // expiry, and the per-login nonce. Decoding without verification is unsafe.
+    const { payload } = await jwtVerify(params.id_token, appleJwks, {
+      algorithms: ['RS256'],
+      issuer: 'https://appleid.apple.com',
+      audience: appleClientId,
+    });
+    if (payload.nonce !== storedNonce) {
+      loginUrl.searchParams.set('error', 'invalid_apple_nonce');
       const res = NextResponse.redirect(loginUrl);
       res.cookies.delete('sentinel_apple_oauth_state');
+      res.cookies.delete('sentinel_apple_oauth_nonce');
       return res;
     }
 
@@ -71,6 +85,7 @@ async function processAppleAuth(
       loginUrl.searchParams.set('error', 'apple_identity_incomplete');
       const res = NextResponse.redirect(loginUrl);
       res.cookies.delete('sentinel_apple_oauth_state');
+      res.cookies.delete('sentinel_apple_oauth_nonce');
       return res;
     }
 
@@ -79,6 +94,7 @@ async function processAppleAuth(
       loginUrl.searchParams.set('error', 'apple_email_unverified');
       const res = NextResponse.redirect(loginUrl);
       res.cookies.delete('sentinel_apple_oauth_state');
+      res.cookies.delete('sentinel_apple_oauth_nonce');
       return res;
     }
 
@@ -110,6 +126,7 @@ async function processAppleAuth(
     const targetUrl = new URL(needsOnboarding ? '/onboarding/profile' : '/overview', baseUrl);
     const response = NextResponse.redirect(targetUrl);
     response.cookies.delete('sentinel_apple_oauth_state');
+    response.cookies.delete('sentinel_apple_oauth_nonce');
     response.cookies.set('sentinel-session', sessionToken, {
       httpOnly: true,
       secure: baseUrl.startsWith('https:'),
@@ -123,6 +140,7 @@ async function processAppleAuth(
     loginUrl.searchParams.set('error', 'apple_auth_failed');
     const res = NextResponse.redirect(loginUrl);
     res.cookies.delete('sentinel_apple_oauth_state');
+    res.cookies.delete('sentinel_apple_oauth_nonce');
     return res;
   }
 }

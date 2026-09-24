@@ -4,16 +4,10 @@ import { getAgentById, getAllFindings, getAllApprovals } from '@/app/lib/db';
 import AgentPassportContent from './agent-passport-content';
 import type { Metadata } from 'next';
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}): Promise<Metadata> {
-  const { id } = await params;
-  const agent = getAgentById(id);
+export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: agent ? `SENTINEL — ${agent.name} Passport` : 'SENTINEL — Agent Passport',
-    description: agent ? agent.description : 'Agent passport details and trust graph.',
+    title: 'SENTINEL — Agent Passport',
+    description: 'Agent passport details and trust graph.',
   };
 }
 
@@ -28,13 +22,13 @@ export default async function AgentPassportPage({
   }
 
   const { id } = await params;
-  const agent = getAgentById(id);
+  const agent = getAgentById(id, session.workspaceId);
 
   if (!agent) {
     notFound();
   }
 
-  const allFindings = getAllFindings();
+  const allFindings = getAllFindings(session.workspaceId);
   const linkedFindings = allFindings.filter(
     (f) =>
       f.target.toLowerCase().includes(agent.name.toLowerCase()) ||
@@ -43,7 +37,7 @@ export default async function AgentPassportPage({
       (agent.id === 'agt-fs-sandbox-02' && f.id === 'SNT-001')
   );
 
-  const allApprovals = getAllApprovals();
+  const allApprovals = getAllApprovals(session.workspaceId);
   const linkedApprovals = allApprovals.filter(
     (a) =>
       linkedFindings.some((f) => f.id === a.findingId) ||

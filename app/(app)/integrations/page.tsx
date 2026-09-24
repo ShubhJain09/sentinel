@@ -12,7 +12,7 @@ export default async function IntegrationsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const integrations = getAllIntegrations();
+  const integrations = getAllIntegrations(session.workspaceId);
 
   return <IntegrationsContent integrations={integrations} session={session} />;
 }

@@ -18,7 +18,7 @@ export default async function OwnerDashboard() {
   const isOwner = session.role === 'owner';
 
   const db = getDb();
-  const users = getAllUsers();
+  const users = getAllUsers(session.role === 'owner' ? undefined : session.workspaceId);
   const workspaceCount = (
     db.prepare('SELECT COUNT(*) as count FROM workspaces').get() as { count: number }
   ).count;

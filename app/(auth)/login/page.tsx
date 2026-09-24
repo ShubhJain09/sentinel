@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState, Suspense } from 'react';
+import { useActionState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { login } from '@/app/actions/auth';
@@ -50,59 +50,6 @@ function LoginForm() {
   const oauthErrorCode = searchParams.get('error');
   const oauthErrorMessage = getErrorMessage(oauthErrorCode);
 
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
-  const [passkeyError, setPasskeyError] = useState<string | null>(null);
-
-  const handlePasskeyAuth = async () => {
-    triggerHaptic('tap');
-    setPasskeyError(null);
-    setPasskeyLoading(true);
-
-    try {
-      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-        setPasskeyError('Your browser does not support the W3C Web Authentication API.');
-        setPasskeyLoading(false);
-        return;
-      }
-
-      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
-      if (!available) {
-        setPasskeyError('No hardware biometric authenticator (Touch ID, Face ID, Windows Hello) detected.');
-        setPasskeyLoading(false);
-        return;
-      }
-
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-
-      const credential = await navigator.credentials.get({
-        publicKey: {
-          challenge,
-          rpId: window.location.hostname,
-          userVerification: 'preferred',
-          timeout: 60000,
-        },
-      }).catch((err) => {
-        if (err.name === 'NotAllowedError') {
-          return null;
-        }
-        throw err;
-      });
-
-      if (!credential) {
-        setPasskeyLoading(false);
-        return;
-      }
-
-      triggerHaptic('selection');
-    } catch (err: any) {
-      console.warn('WebAuthn note:', err);
-      setPasskeyError('No paired passkey found. Sign in with your password to register one in Profile.');
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
-
   return (
     <div className="liquid-glass-card p-8 sm:p-10 rounded-[32px] shadow-2xl space-y-6 border border-white/80 dark:border-white/10 relative">
       {/* Top Ribbon Symbol */}
@@ -136,13 +83,6 @@ function LoginForm() {
           </div>
         )}
 
-        {passkeyError && (
-          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[var(--status-warning-subtle)] border border-[var(--status-warning-border)] text-[var(--status-warning)] text-[12px] animate-fade">
-            <Icon name="lock" size={15} className="shrink-0" />
-            <span>{passkeyError}</span>
-          </div>
-        )}
-
         <div className="space-y-1.5">
           <label htmlFor="email" className="text-[12px] font-medium text-[var(--text-secondary)] block">
             Email address
@@ -154,7 +94,6 @@ function LoginForm() {
             autoComplete="email"
             required
             placeholder="name@company.com"
-            defaultValue="workspaceshubhjain@gmail.com"
             className="input-apple text-[13.5px] h-10 px-3.5 rounded-xl w-full"
           />
         </div>
@@ -178,7 +117,6 @@ function LoginForm() {
             autoComplete="current-password"
             required
             placeholder="Enter account password"
-            defaultValue="SentinelDev2026!Secure"
             className="input-apple text-[13.5px] h-10 px-3.5 rounded-xl w-full"
           />
         </div>
@@ -210,26 +148,6 @@ function LoginForm() {
               or authenticate with
             </span>
           </div>
-
-          {/* Sign In with Passkey (WebAuthn) */}
-          <button
-            type="button"
-            disabled={passkeyLoading}
-            onClick={handlePasskeyAuth}
-            className="w-full flex items-center justify-center gap-2 h-10 rounded-full bg-[var(--surface-solid)] border border-[var(--border-hairline)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] text-[13px] font-medium transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-          >
-            {passkeyLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-3.5 w-3.5 rounded-full border-2 border-[var(--accent-blue)] border-t-transparent animate-spin" />
-                <span>Authenticating with Passkey…</span>
-              </span>
-            ) : (
-              <>
-                <Icon name="lock" size={14} className="text-[var(--accent-blue)]" />
-                <span>Sign in with Passkey</span>
-              </>
-            )}
-          </button>
 
           {/* Social Provider Buttons */}
           <OAuthProviderButtons className="pt-0.5" />

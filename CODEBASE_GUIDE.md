@@ -32,7 +32,7 @@ sentinel/
 │   │   │   └── security/         # Owner-only security policy controls
 │   ├── (auth)/                   # Authentication flows (unauthenticated)
 │   │   ├── layout.tsx            # Minimal auth card layout
-│   │   ├── login/                # Email + Password, Google OAuth, Passkey login
+│   │   ├── login/                # Email + Password and configured OAuth providers
 │   │   ├── verify-login/         # 6-digit Email OTP challenge verification
 │   │   ├── signup/               # New user registration
 │   │   ├── forgot-password/      # Request password reset link

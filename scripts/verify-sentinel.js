@@ -37,9 +37,9 @@ async function verify() {
   console.log('\n[3/5] Verifying Users & OWNER Authorization...');
   const users = db.prepare('SELECT id, email, name, role FROM users').all();
   console.log(`  ✓ Total users in database: ${users.length}`);
-  const owner = users.find((u) => u.email === 'workspaceshubhjain@gmail.com');
+  const owner = users.find((u) => u.role === 'owner');
   if (!owner) {
-    throw new Error('Required OWNER workspaceshubhjain@gmail.com not found in users table!');
+    throw new Error('No OWNER account found in users table.');
   }
   if (owner.role !== 'owner') {
     throw new Error(`Owner account role is "${owner.role}", expected "owner"!`);

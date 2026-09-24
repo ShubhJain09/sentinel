@@ -15,11 +15,11 @@ export default async function OverviewPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const counts = getOverviewCounts();
-  const recentScans = getAllScans().slice(0, 5);
-  const openFindings = getAllFindings().filter(f => f.status === 'open');
-  const pendingApprovals = getAllApprovals().filter(a => a.status === 'pending');
-  const recentAudits = getAllAuditEvents(5);
+  const counts = getOverviewCounts(session.workspaceId);
+  const recentScans = getAllScans(session.workspaceId).slice(0, 5);
+  const openFindings = getAllFindings(session.workspaceId).filter(f => f.status === 'open');
+  const pendingApprovals = getAllApprovals(session.workspaceId).filter(a => a.status === 'pending');
+  const recentAudits = getAllAuditEvents(5, session.workspaceId);
 
   return (
     <OverviewContent 

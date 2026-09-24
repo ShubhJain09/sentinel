@@ -20,6 +20,11 @@ const publicRoutes = [
 ];
 const publicPrefixes = ['/api/auth/', '/_next/', '/support/'];
 
+function getSessionKey(): Uint8Array | null {
+  const secret = process.env.JWT_SECRET?.trim();
+  return secret && secret.length >= 32 ? new TextEncoder().encode(secret) : null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -36,9 +41,13 @@ export async function middleware(request: NextRequest) {
       const session = request.cookies.get('sentinel-session')?.value;
       if (session) {
         try {
-          const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
-          const encodedKey = new TextEncoder().encode(secretKey);
-          await jwtVerify(session, encodedKey, { algorithms: ['HS256'] });
+          const encodedKey = getSessionKey();
+          if (!encodedKey) throw new Error('Authentication is not configured');
+          await jwtVerify(session, encodedKey, {
+            algorithms: ['HS256'],
+            issuer: 'sentinel',
+            audience: 'sentinel-session',
+          });
           return NextResponse.redirect(new URL('/overview', request.url));
         } catch (e) {
           // Invalid session, let them access auth page
@@ -67,15 +76,15 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
-    const encodedKey = new TextEncoder().encode(secretKey);
-    const { payload } = await jwtVerify(session, encodedKey, { algorithms: ['HS256'] });
+    const encodedKey = getSessionKey();
+    if (!encodedKey) throw new Error('Authentication is not configured');
+    const { payload } = await jwtVerify(session, encodedKey, {
+      algorithms: ['HS256'],
+      issuer: 'sentinel',
+      audience: 'sentinel-session',
+    });
     
-    const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-      .toLowerCase()
-      .split(',')
-      .map((e) => e.trim());
-    const isOwner = payload.role === 'owner' || (typeof payload.email === 'string' && ownerEmails.includes(payload.email.toLowerCase()));
+    const isOwner = payload.role === 'owner';
     const isAdmin = payload.role === 'admin';
 
     // Check owner / admin routes

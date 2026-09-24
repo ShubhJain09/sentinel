@@ -28,8 +28,10 @@ export default async function SecretsPage() {
     {
       name: 'OWNER_EMAIL',
       scope: 'Unique Root Platform Owner Account',
-      value: (process.env.OWNER_EMAIL || 'workspaceshubhjain@gmail.com').replace(/(.{2})(.*)(@.*)/, '$1••••$3'),
-      status: 'Enforced',
+      value: process.env.OWNER_EMAIL
+        ? process.env.OWNER_EMAIL.replace(/(.{2})(.*)(@.*)/, '$1••••$3')
+        : 'Not Configured',
+      status: process.env.OWNER_EMAIL ? 'Enforced' : 'Standby',
       lastRotated: 'Permanent',
       securityLevel: 'Root Authority',
     },

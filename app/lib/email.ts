@@ -245,8 +245,7 @@ export async function sendPasswordResetEmail({
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        console.error('[sendPasswordResetEmail] Resend API error:', errText);
+        console.error('[sendPasswordResetEmail] Resend API error status:', res.status);
         recordEmailLog({
           recipient: to,
           subject,
@@ -263,7 +262,6 @@ export async function sendPasswordResetEmail({
         subject,
         provider: 'resend',
         status: 'sent',
-        previewUrl: resetUrl,
       });
       return { success: true, provider: 'resend', messageId: data?.id };
     } catch (err: any) {
@@ -299,8 +297,7 @@ export async function sendPasswordResetEmail({
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        console.error('[sendPasswordResetEmail] Postmark API error:', errText);
+        console.error('[sendPasswordResetEmail] Postmark API error status:', res.status);
         recordEmailLog({
           recipient: to,
           subject,
@@ -317,7 +314,6 @@ export async function sendPasswordResetEmail({
         subject,
         provider: 'postmark',
         status: 'sent',
-        previewUrl: resetUrl,
       });
       return { success: true, provider: 'postmark', messageId: data?.MessageID };
     } catch (err: any) {
@@ -362,7 +358,6 @@ export async function sendPasswordResetEmail({
         subject,
         provider: 'smtp',
         status: 'sent',
-        previewUrl: resetUrl,
       });
       return { success: true, provider: 'smtp', messageId: info.messageId };
     } catch (err: any) {
@@ -378,29 +373,20 @@ export async function sendPasswordResetEmail({
     }
   }
 
-  // 4. Development Standby / Local Outbox Mode
-  // If no external transactional credentials exist, capture and record the email
-  console.log('────────────────────────────────────────────────────────────');
-  console.log('[SENTINEL TRANSACTIONAL EMAIL — OUTBOX CAPTURE]');
-  console.log(`To: ${to}`);
-  console.log(`From: ${from}`);
-  console.log(`Subject: ${subject}`);
-  console.log(`Reset URL: ${resetUrl}`);
-  console.log('────────────────────────────────────────────────────────────');
-
+  // 4. Fail closed when no delivery provider is configured. Authentication
+  // secrets must never be printed or persisted as a development convenience.
   recordEmailLog({
     recipient: to,
     subject,
-    provider: 'development',
-    status: 'dev_captured',
-    previewUrl: resetUrl,
+    provider: 'unconfigured',
+    status: 'failed',
+    error: 'No transactional email provider configured',
   });
 
   return {
-    success: true,
-    provider: 'development',
-    messageId: `dev_${Date.now()}`,
-    previewUrl: resetUrl,
+    success: false,
+    provider: 'unconfigured',
+    error: 'No transactional email provider configured',
   };
 }
 
@@ -719,25 +705,20 @@ export async function sendLoginOtpEmail({
   // 4. Development Standby / Local Outbox Mode
   console.log('────────────────────────────────────────────────────────────');
   console.log('[SENTINEL TRANSACTIONAL EMAIL — LOGIN OTP OUTBOX CAPTURE]');
-  console.log(`To: ${to}`);
-  console.log(`From: ${from}`);
-  console.log(`Subject: ${subject}`);
-  console.log(`OTP Code: ${otp}`);
+  console.log('Login OTP delivery is unavailable because no transactional email provider is configured.');
   console.log('────────────────────────────────────────────────────────────');
 
   recordEmailLog({
     recipient: to,
     subject,
-    provider: 'development',
-    status: 'dev_captured',
-    previewUrl: otp,
+    provider: 'unconfigured',
+    status: 'failed',
+    error: 'No transactional email provider configured',
   });
 
   return {
-    success: true,
-    provider: 'development',
-    messageId: `otp_dev_${Date.now()}`,
-    previewUrl: otp,
+    success: false,
+    provider: 'unconfigured',
+    error: 'No transactional email provider configured',
   };
 }
-

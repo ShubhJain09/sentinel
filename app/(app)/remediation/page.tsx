@@ -13,7 +13,7 @@ export default async function RemediationPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const approvals = getAllApprovals();
+  const approvals = getAllApprovals(session.workspaceId);
 
   return <RemediationContent approvals={approvals} />;
 }

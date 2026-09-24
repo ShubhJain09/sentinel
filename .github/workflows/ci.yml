@@ -19,7 +19,8 @@ jobs:
     env:
       DATABASE_PATH: /tmp/sentinel-ci.db
       JWT_SECRET: ci_test_jwt_secret_sentinel_2026_super_secure_key
-      OWNER_INITIAL_PASSWORD: SentinelOwner2026!Secure
+      OWNER_EMAIL: ci-owner@example.invalid
+      OWNER_INITIAL_PASSWORD: ci-only-password-not-for-deployment-2026!
 
     steps:
       - name: Checkout Code

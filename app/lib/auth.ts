@@ -1,10 +1,24 @@
 import { SignJWT, jwtVerify } from 'jose';
+import 'server-only';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import { UserRole } from '@/app/lib/types';
 
-const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
-const encodedKey = new TextEncoder().encode(secretKey);
+export function getConfiguredOwnerEmails(): string[] {
+  return (process.env.OWNER_EMAIL || '')
+    .toLowerCase()
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+export function getSessionSigningKey(): Uint8Array {
+  const configuredSecret = process.env.JWT_SECRET?.trim();
+  if (configuredSecret && configuredSecret.length >= 32) {
+    return new TextEncoder().encode(configuredSecret);
+  }
+  throw new Error('JWT_SECRET must be configured with at least 32 characters.');
+}
 
 export type Session = {
   userId: string;
@@ -22,17 +36,20 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  if (!hash.startsWith('$2')) return false;
   return bcrypt.compare(password, hash);
 }
 
 export async function createSession(user: Session): Promise<{ token: string; expiresAt: Date }> {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const session = await new SignJWT(user as any)
+  const session = await new SignJWT({ userId: user.userId, role: user.role })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('sentinel')
+    .setAudience('sentinel-session')
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(encodedKey);
+    .sign(getSessionSigningKey());
 
   try {
     const cookieStore = await cookies();
@@ -64,8 +81,10 @@ export async function getSession(): Promise<Session | null> {
   }
 
   try {
-    const { payload } = await jwtVerify(session, encodedKey, {
+    const { payload } = await jwtVerify(session, getSessionSigningKey(), {
       algorithms: ['HS256'],
+      issuer: 'sentinel',
+      audience: 'sentinel-session',
     });
 
     const userSession = payload as unknown as Session;
@@ -81,10 +100,7 @@ export async function getSession(): Promise<Session | null> {
       return null;
     }
 
-    const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-      .toLowerCase()
-      .split(',')
-      .map((e) => e.trim());
+    const ownerEmails = getConfiguredOwnerEmails();
 
     if (dbUser.email && ownerEmails.includes(dbUser.email.toLowerCase())) {
       userSession.role = 'owner';
@@ -97,6 +113,7 @@ export async function getSession(): Promise<Session | null> {
     userSession.username = dbUser.username;
     userSession.avatarUrl = dbUser.avatarUrl;
     userSession.avatarInitials = dbUser.avatarInitials;
+    userSession.workspaceId = dbUser.workspaceId;
 
     return userSession;
   } catch (error) {
@@ -129,16 +146,17 @@ export function maskEmail(email: string): string {
 export interface LoginChallengeSession {
   challengeId: string;
   userId: string;
-  email: string;
   maskedEmail: string;
 }
 
 export async function createLoginChallengeToken(payload: LoginChallengeSession): Promise<string> {
   return await new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('sentinel')
+    .setAudience('sentinel-login-challenge')
     .setIssuedAt()
     .setExpirationTime('10m')
-    .sign(encodedKey);
+    .sign(getSessionSigningKey());
 }
 
 export async function setLoginChallengeCookie(token: string): Promise<void> {
@@ -162,8 +180,10 @@ export async function getLoginChallengeSession(): Promise<LoginChallengeSession 
     const token = cookieStore.get('sentinel_login_challenge')?.value;
     if (!token) return null;
 
-    const { payload } = await jwtVerify(token, encodedKey, {
+    const { payload } = await jwtVerify(token, getSessionSigningKey(), {
       algorithms: ['HS256'],
+      issuer: 'sentinel',
+      audience: 'sentinel-login-challenge',
     });
 
     return payload as unknown as LoginChallengeSession;
@@ -196,9 +216,9 @@ export function getProviderConfig() {
 
   const appleClientId = process.env.APPLE_CLIENT_ID?.trim() || '';
   const appleTeamId = process.env.APPLE_TEAM_ID?.trim() || '';
-  const appleKeyId = process.env.APPLE_KEY_ID?.trim() || '';
-  const applePrivateKey = process.env.APPLE_PRIVATE_KEY?.trim() || '';
-  const isAppleConfigured = Boolean(appleClientId && (applePrivateKey || appleKeyId || appleTeamId));
+  // This flow verifies Apple's identity token directly against the public JWKS.
+  // A private key is only required when exchanging an authorization code.
+  const isAppleConfigured = Boolean(appleClientId);
 
   return {
     google: {
@@ -211,7 +231,7 @@ export function getProviderConfig() {
       teamIdMasked: isAppleConfigured && appleTeamId ? `${appleTeamId.substring(0, 4)}...` : null,
     },
     passkey: {
-      available: true,
+      available: false,
       standard: 'FIDO2 / WebAuthn Level 3',
     },
     password: {
@@ -344,15 +364,17 @@ export async function handleOAuthLogin({
     ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
     : displayName.substring(0, 2).toUpperCase();
 
-  const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-    .toLowerCase()
-    .split(',')
-    .map((e) => e.trim());
-  const role = ownerEmails.includes(normalizedEmail) ? 'owner' : 'user';
+  const ownerEmails = getConfiguredOwnerEmails();
+  const userCount = (db.prepare('SELECT COUNT(*) AS count FROM users').get() as { count: number }).count;
+  const role = ownerEmails.includes(normalizedEmail) || userCount === 0 ? 'owner' : 'user';
 
   const randomSalt = generateId() + generateId();
   const passwordHash = await hashPassword(randomSalt);
-  const defaultWorkspaceId = 'default-workspace-id';
+  const workspaceId = generateId();
+
+  db.prepare(
+    'INSERT INTO workspaces (id, name, ownerId, createdAt) VALUES (?, ?, ?, ?)'
+  ).run(workspaceId, `${displayName}'s workspace`, newUserId, timestamp);
 
   db.prepare(`
     INSERT INTO users (id, email, name, passwordHash, role, avatarInitials, workspaceId, avatarUrl, createdAt, updatedAt, isActive, isOnboarded)
@@ -364,7 +386,7 @@ export async function handleOAuthLogin({
     passwordHash,
     role,
     avatarInitials,
-    defaultWorkspaceId,
+    workspaceId,
     avatarUrl || null,
     timestamp,
     timestamp
@@ -397,7 +419,7 @@ export async function handleOAuthLogin({
     name: displayName,
     role,
     avatarInitials,
-    workspaceId: defaultWorkspaceId,
+    workspaceId,
     avatarUrl: avatarUrl || null,
   };
   const { token: sessionToken, expiresAt } = await createSession(session);

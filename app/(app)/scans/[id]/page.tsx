@@ -18,7 +18,7 @@ export default async function ScanDetailPage({
   if (!session) redirect('/login');
 
   const { id } = await params;
-  const scan = getScanById(id);
+  const scan = getScanById(id, session.workspaceId);
 
   if (!scan) {
     notFound();

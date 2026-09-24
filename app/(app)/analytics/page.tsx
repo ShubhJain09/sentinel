@@ -15,9 +15,9 @@ export default async function AnalyticsPage() {
     redirect("/login");
   }
 
-  const scans = getAllScans();
-  const findings = getAllFindings();
-  const approvals = getAllApprovals();
+  const scans = getAllScans(session.workspaceId);
+  const findings = getAllFindings(session.workspaceId);
+  const approvals = getAllApprovals(session.workspaceId);
 
   return <AnalyticsContent scans={scans} findings={findings} approvals={approvals} />;
 }

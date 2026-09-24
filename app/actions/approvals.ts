@@ -20,15 +20,23 @@ export async function decideApproval(
   const db = getDb();
   const timestamp = now();
 
-  const approval = db.prepare('SELECT * FROM approvals WHERE id = ?').get(approvalId) as any;
+  const approval = db.prepare(`
+    SELECT a.* FROM approvals a
+    JOIN findings f ON f.id = a.findingId
+    JOIN scans s ON s.id = f.scanId
+    WHERE a.id = ? AND s.workspaceId = ?
+  `).get(approvalId, session.workspaceId) as any;
   if (!approval) throw new Error('Approval request not found');
 
   // 1. Record decision
   db.prepare(`
     UPDATE approvals 
     SET status = ?, reviewedBy = ?, reviewComment = ?, reviewedAt = ?
-    WHERE id = ?
-  `).run(decision, session.userId, comment || null, timestamp, approvalId);
+    WHERE id = ? AND EXISTS (
+      SELECT 1 FROM findings f JOIN scans s ON s.id = f.scanId
+      WHERE f.id = approvals.findingId AND s.workspaceId = ?
+    )
+  `).run(decision, session.userId, comment || null, timestamp, approvalId, session.workspaceId);
 
   // 2. If approved, create initial remediation task in approved status
   if (decision === 'approved') {
@@ -70,7 +78,12 @@ export async function executeAndRetestRemediation(approvalId: string) {
   const db = getDb();
   const timestamp = now();
 
-  const approval = db.prepare('SELECT * FROM approvals WHERE id = ?').get(approvalId) as any;
+  const approval = db.prepare(`
+    SELECT a.* FROM approvals a
+    JOIN findings f ON f.id = a.findingId
+    JOIN scans s ON s.id = f.scanId
+    WHERE a.id = ? AND s.workspaceId = ?
+  `).get(approvalId, session.workspaceId) as any;
   if (!approval || approval.status !== 'approved') {
     throw new Error('Action not authorized: approval must be in approved status before execution');
   }

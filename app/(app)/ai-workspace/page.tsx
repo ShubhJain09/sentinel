@@ -39,7 +39,7 @@ export default async function AIWorkspacePage() {
 
   let findings: any[] = [];
   try {
-    findings = getAllFindings() || [];
+    findings = getAllFindings(session.workspaceId) || [];
   } catch (err) {
     console.error('[AIWorkspacePage] Error loading findings:', err);
     findings = [];
@@ -47,7 +47,7 @@ export default async function AIWorkspacePage() {
 
   let scans: any[] = [];
   try {
-    scans = getAllScans() || [];
+    scans = getAllScans(session.workspaceId) || [];
   } catch (err) {
     console.error('[AIWorkspacePage] Error loading scans:', err);
     scans = [];
@@ -55,7 +55,7 @@ export default async function AIWorkspacePage() {
 
   let initialConversations: any[] = [];
   try {
-    initialConversations = getAiConversations(session.userId) || [];
+    initialConversations = getAiConversations(session.userId, session.workspaceId) || [];
   } catch (err) {
     console.error('[AIWorkspacePage] Error loading conversations:', err);
     initialConversations = [];

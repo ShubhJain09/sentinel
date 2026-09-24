@@ -1,11 +1,13 @@
 'use server';
 
 import { getSession } from '@/app/lib/auth';
-import { getDb, generateId, now, getUserById } from '@/app/lib/db';
+import { getDb, generateId, now, getUserById, createPasswordResetToken } from '@/app/lib/db';
 import type { UserRole, Session } from '@/app/lib/types';
 import { canSuspendUser, canTerminateUser } from '@/app/lib/permissions';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { sendPasswordResetEmail } from '@/app/lib/email';
 
 function requireAdminOrOwner(session: Session | null): asserts session is Session & { role: 'owner' | 'admin' } {
   if (!session || (session.role !== 'owner' && session.role !== 'admin')) {
@@ -39,15 +41,15 @@ export async function inviteUser(formData: FormData) {
   }
 
   const db = getDb();
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(email);
   if (existing) {
     return { success: false, error: 'User with this email already exists' };
   }
 
   const userId = generateId();
   const timestamp = now();
-  const tempPassword = `Sentinel${Math.floor(1000 + Math.random() * 9000)}!`;
-  const passwordHash = bcrypt.hashSync(tempPassword, 10);
+  const unusableRandomPassword = crypto.randomBytes(32).toString('base64url');
+  const passwordHash = bcrypt.hashSync(unusableRandomPassword, 10);
 
   const nameParts = name.split(' ');
   const avatarInitials = nameParts.length > 1
@@ -59,11 +61,12 @@ export async function inviteUser(formData: FormData) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(userId, email, name, passwordHash, requestedRole, avatarInitials, session.workspaceId, timestamp, timestamp);
 
+  const auditId = generateId();
   db.prepare(`
     INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
     VALUES (?, 'user.invited', ?, ?, 'user', ?, ?, ?)
   `).run(
-    generateId(),
+    auditId,
     session.userId,
     session.name,
     userId,
@@ -71,8 +74,29 @@ export async function inviteUser(formData: FormData) {
     timestamp
   );
 
+  const rawResetToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawResetToken).digest('hex');
+  createPasswordResetToken(userId, tokenHash, new Date(Date.now() + 60 * 60 * 1000).toISOString());
+  const appUrl = (process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const delivery = await sendPasswordResetEmail({
+    to: email,
+    resetUrl: `${appUrl}/reset-password?token=${rawResetToken}`,
+    baseUrl: appUrl,
+  });
+
+  if (!delivery.success) {
+    // Do not leave behind an unreachable account when its one-time setup link
+    // could not be delivered. The email failure log is intentionally retained.
+    db.transaction(() => {
+      db.prepare('DELETE FROM password_reset_tokens WHERE userId = ?').run(userId);
+      db.prepare('DELETE FROM audit_events WHERE id = ?').run(auditId);
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    })();
+    return { success: false, error: 'Invitation could not be delivered. Configure transactional email and try again.' };
+  }
+
   revalidatePath('/owner/users');
-  return { success: true, tempPassword };
+  return { success: true, message: 'Invitation created. The user must set a password through the emailed secure link.' };
 }
 
 export async function updateUserRole(userId: string, newRole: UserRole) {
@@ -89,6 +113,9 @@ export async function updateUserRole(userId: string, newRole: UserRole) {
 
   const targetUser = getUserById(userId);
   if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+  if (session.role !== 'owner' && targetUser.workspaceId !== session.workspaceId) {
     return { success: false, error: 'User not found' };
   }
 
@@ -124,6 +151,9 @@ export async function toggleUserStatus(userId: string, currentStatus: boolean) {
 
   const targetUser = getUserById(userId);
   if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+  if (session.role !== 'owner' && targetUser.workspaceId !== session.workspaceId) {
     return { success: false, error: 'User not found' };
   }
 
@@ -170,6 +200,9 @@ export async function terminateUser(userId: string) {
 
   const targetUser = getUserById(userId);
   if (!targetUser) {
+    return { success: false, error: 'User not found' };
+  }
+  if (session.role !== 'owner' && targetUser.workspaceId !== session.workspaceId) {
     return { success: false, error: 'User not found' };
   }
 

@@ -12,7 +12,7 @@ export default async function ScansPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const scans = getAllScans();
+  const scans = getAllScans(session.workspaceId);
 
   return <ScansContent scans={scans} />;
 }

@@ -224,7 +224,7 @@ export default function AgentPassportContent({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[12px] border-t border-[var(--border-hairline)]">
                 <div>
                   <span className="text-[10px] uppercase font-semibold text-[var(--text-tertiary)] block">Owner</span>
-                  <span className="text-[var(--text-primary)] font-medium">Shubh Jain (@shubh)</span>
+                  <span className="text-[var(--text-primary)] font-medium">Workspace Owner</span>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-semibold text-[var(--text-tertiary)] block">Environment</span>

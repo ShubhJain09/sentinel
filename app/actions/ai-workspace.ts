@@ -68,7 +68,7 @@ export async function getAiConversationsAction(): Promise<{
   }
 
   try {
-    const conversations = getAiConversations(session.userId);
+    const conversations = getAiConversations(session.userId, session.workspaceId);
     return { success: true, conversations };
   } catch (err: any) {
     console.error('Failed to get AI conversations:', err);

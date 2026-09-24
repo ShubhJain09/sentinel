@@ -24,6 +24,7 @@ import {
   getLoginChallengeSession,
   clearLoginChallengeCookie,
   maskEmail,
+  getConfiguredOwnerEmails,
 } from '@/app/lib/auth';
 import { sendLoginOtpEmail } from '@/app/lib/email';
 import type { UserRole } from '@/app/lib/types';
@@ -60,22 +61,20 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
     return { success: false, error: result.error.issues[0]?.message || 'Validation error' };
   }
 
-  const { name, email, password } = result.data;
+  const { name, password } = result.data;
+  const email = result.data.email.trim().toLowerCase();
 
   try {
     const db = getDb();
 
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(email);
     if (existingUser) {
       return { success: false, error: 'An account with this email already exists' };
     }
 
     // Designated owner or first user becomes owner
     const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
-    const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-      .toLowerCase()
-      .split(',')
-      .map((e) => e.trim());
+    const ownerEmails = getConfiguredOwnerEmails();
     const isDesignatedOwner = ownerEmails.includes(email.toLowerCase().trim());
     const role: UserRole = isDesignatedOwner || userCount === 0 ? 'owner' : 'user';
 
@@ -83,18 +82,9 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
     const userId = generateId();
     const timestamp = now();
 
-    // Get or create workspace
-    let workspaceId: string;
-    const existingWorkspace = db.prepare('SELECT id FROM workspaces LIMIT 1').get() as { id: string } | undefined;
-    
-    if (existingWorkspace) {
-      workspaceId = existingWorkspace.id;
-    } else {
-      workspaceId = generateId();
-      db.prepare('INSERT INTO workspaces (id, name, ownerId, createdAt) VALUES (?, ?, ?, ?)').run(
-        workspaceId, 'Personal workspace', userId, timestamp
-      );
-    }
+    // Every self-service account receives an isolated workspace. Existing users and
+    // their data remain untouched; workspace sharing must be an explicit admin action.
+    const workspaceId = generateId();
 
     // Generate avatar initials
     const nameParts = name.trim().split(' ');
@@ -102,17 +92,19 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
       ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
       : name.substring(0, 2).toUpperCase();
 
-    // Insert user with camelCase column names matching schema
-    db.prepare(`
-      INSERT INTO users (id, email, name, passwordHash, role, avatarInitials, workspaceId, createdAt, updatedAt, isActive)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(userId, email, name, hashedPassword, role, avatarInitials, workspaceId, timestamp, timestamp);
-
-    // Log audit event
-    db.prepare(`
-      INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
-      VALUES (?, 'user.signup', ?, ?, 'user', ?, ?, ?)
-    `).run(generateId(), userId, name, userId, `${name} created an account`, timestamp);
+    db.transaction(() => {
+      db.prepare('INSERT INTO workspaces (id, name, ownerId, createdAt) VALUES (?, ?, ?, ?)').run(
+        workspaceId, `${name.trim()}'s workspace`, userId, timestamp
+      );
+      db.prepare(`
+        INSERT INTO users (id, email, name, passwordHash, role, avatarInitials, workspaceId, createdAt, updatedAt, isActive)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `).run(userId, email, name.trim(), hashedPassword, role, avatarInitials, workspaceId, timestamp, timestamp);
+      db.prepare(`
+        INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
+        VALUES (?, 'user.signup', ?, ?, 'user', ?, ?, ?)
+      `).run(generateId(), userId, name.trim(), userId, 'Operator created an account', timestamp);
+    })();
 
     await createSession({ userId, email, name, role, avatarInitials, workspaceId });
   } catch (error) {
@@ -206,7 +198,6 @@ export async function login(prevState: ActionState, formData: FormData): Promise
     const challengeToken = await createLoginChallengeToken({
       challengeId,
       userId: user.id,
-      email: user.email,
       maskedEmail: masked,
     });
     await setLoginChallengeCookie(challengeToken);
@@ -307,10 +298,7 @@ export async function verifyLoginOtp(prevState: ActionState, formData: FormData)
   await clearLoginChallengeCookie();
 
   // Role resolution
-  const ownerEmails = (process.env.OWNER_EMAIL || 'owner@sentinel.security,workspaceshubhjain@gmail.com')
-    .toLowerCase()
-    .split(',')
-    .map((e) => e.trim());
+  const ownerEmails = getConfiguredOwnerEmails();
   let effectiveRole = user.role;
   if (ownerEmails.includes(user.email.toLowerCase()) && user.role !== 'owner') {
     effectiveRole = 'owner';
@@ -434,4 +422,3 @@ export async function validateResetToken(rawToken: string | null | undefined): P
 export async function resetPassword(prevState: ActionState, formData: FormData): Promise<ActionState> {
   return passwordResetModule.resetPassword(prevState, formData);
 }
-

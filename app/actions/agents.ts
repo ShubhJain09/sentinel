@@ -16,10 +16,13 @@ export async function toggleShadowModeAction(agentId: string, enabled: boolean) 
   }
 
   try {
-    toggleAgentShadowMode(agentId, enabled);
+    const updated = toggleAgentShadowMode(agentId, session.workspaceId, enabled);
+    if (!updated) {
+      return { success: false, error: 'Agent not found in this workspace' };
+    }
     const db = getDb();
     const timestamp = now();
-    const agent = getAgentById(agentId);
+    const agent = getAgentById(agentId, session.workspaceId);
 
     db.prepare(`
       INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)
@@ -53,10 +56,13 @@ export async function acknowledgeDriftAction(agentId: string) {
   }
 
   try {
-    acknowledgeAgentDrift(agentId);
+    const updated = acknowledgeAgentDrift(agentId, session.workspaceId);
+    if (!updated) {
+      return { success: false, error: 'Agent not found in this workspace' };
+    }
     const db = getDb();
     const timestamp = now();
-    const agent = getAgentById(agentId);
+    const agent = getAgentById(agentId, session.workspaceId);
 
     db.prepare(`
       INSERT INTO audit_events (id, action, userId, userName, targetType, targetId, detail, createdAt)

@@ -17,17 +17,22 @@ export default async function FindingDetailPage({
   if (!session) redirect('/login');
 
   const { id } = await params;
-  const finding = getFindingById(id);
+  const finding = getFindingById(id, session.workspaceId);
 
   if (!finding) {
     notFound();
   }
 
-  const evidenceList = getEvidenceForFinding(finding.id);
+  const evidenceList = getEvidenceForFinding(finding.id, session.workspaceId);
   const db = getDb();
   const linkedApprovals = db
-    .prepare('SELECT * FROM approvals WHERE findingId = ?')
-    .all(finding.id) as Approval[];
+    .prepare(`
+      SELECT a.* FROM approvals a
+      JOIN findings f ON f.id = a.findingId
+      JOIN scans s ON s.id = f.scanId
+      WHERE a.findingId = ? AND s.workspaceId = ?
+    `)
+    .all(finding.id, session.workspaceId) as Approval[];
 
   return (
     <FindingDetailView

@@ -87,9 +87,10 @@ async function runLiveVerification() {
     const owner = db.prepare("SELECT * FROM users WHERE role = 'owner' LIMIT 1").get();
     db.close();
 
-    assert(!!owner, `Registered owner account found: ${owner?.email}`);
+    assert(!!owner, 'Registered owner account found');
 
-    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET || JWT_SECRET.length < 32) throw new Error('JWT_SECRET is required for authentication tests');
     const encodedKey = new TextEncoder().encode(JWT_SECRET);
 
     const token = await new SignJWT({
@@ -102,6 +103,8 @@ async function runLiveVerification() {
       username: owner.username || 'owner',
     })
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('sentinel')
+      .setAudience('sentinel-session')
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(encodedKey);

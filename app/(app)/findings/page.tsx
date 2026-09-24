@@ -17,8 +17,8 @@ export default async function FindingsPage({
   if (!session) redirect('/login');
 
   const { selected } = (await searchParams) || {};
-  const findings = getAllFindings();
-  const evidence = getAllEvidence();
+  const findings = getAllFindings(session.workspaceId);
+  const evidence = getAllEvidence(session.workspaceId);
 
   return (
     <FindingsContent

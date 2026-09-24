@@ -12,8 +12,8 @@ export default async function EvidencePage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const evidence = getAllEvidence();
-  const findings = getAllFindings();
+  const evidence = getAllEvidence(session.workspaceId);
+  const findings = getAllFindings(session.workspaceId);
 
   return <EvidenceContent evidence={evidence} findings={findings} />;
 }

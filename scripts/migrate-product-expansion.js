@@ -33,27 +33,9 @@ for (const col of columnsToAdd) {
   }
 }
 
-// 2. Update owner workspaceshubhjain@gmail.com with rich profile
-const ownerEmail = 'workspaceshubhjain@gmail.com';
-const owner = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(ownerEmail);
-if (owner) {
-  console.log(`Updating owner profile for ${ownerEmail}...`);
-  db.prepare(`
-    UPDATE users SET
-      username = 'shubh',
-      bio = 'Principal Security Architect & Autonomous Systems Lead at Sentinel.',
-      dob = '1998-04-15',
-      website = 'https://sentinel.security',
-      github = 'shubhjain',
-      linkedin = 'shubhjain',
-      instagram = 'shubhjain',
-      xTwitter = 'shubhjain',
-      location = 'San Francisco, CA',
-      isOnboarded = 1
-    WHERE id = ?
-  `).run(owner.id);
-  console.log('Owner profile updated successfully.');
-}
+// 2. Resolve an existing owner for optional demo-agent ownership without
+// embedding or modifying personal profile data.
+const owner = db.prepare("SELECT * FROM users WHERE role = 'owner' ORDER BY createdAt ASC LIMIT 1").get();
 
 // 3. Create agents table
 db.exec(`

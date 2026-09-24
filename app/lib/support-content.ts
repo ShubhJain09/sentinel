@@ -46,7 +46,7 @@ export const SUPPORT_CATEGORIES: SupportCategory[] = [
   {
     id: 'account',
     title: 'Account & Profile',
-    description: 'Operator identity, biometric passkeys, unique @username handles, and 18+ verification.',
+    description: 'Operator identity, secure sign-in methods, unique @username handles, and 18+ verification.',
     icon: 'lock',
     color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
   },
@@ -144,7 +144,7 @@ export const SUPPORT_CATEGORIES: SupportCategory[] = [
   {
     id: 'troubleshooting',
     title: 'Troubleshooting',
-    description: 'Diagnosing failed scans, biometric passkey pairing issues, and SSO identity resolving.',
+    description: 'Diagnosing failed scans, sign-in issues, and SSO identity resolving.',
     icon: 'refresh',
     color: 'text-red-500 bg-red-500/10 border-red-500/20',
   },
@@ -546,22 +546,17 @@ After applying a patch, Sentinel validates the fix by replaying the exact probe 
   {
     slug: 'passkeys',
     categoryId: 'account',
-    title: 'Setting Up & Authenticating with Biometric Passkeys',
-    summary: 'Enroll Touch ID, Face ID, or hardware FIDO2 security keys for instant passwordless sign-in.',
+    title: 'Passkey Availability',
+    summary: 'Current passkey availability and the safeguards required before enablement.',
     readTime: '3 min read',
     lastUpdated: 'September 2026',
     keywords: ['passkeys', 'webauthn', 'touch id', 'face id', 'biometrics', 'fido2', 'passwordless'],
     content: `
-# Biometric Passkeys in Sentinel
+# Passkeys in Sentinel
 
-Sentinel supports the W3C Web Authentication standard (WebAuthn) for secure, phishing-resistant, passwordless authentication.
+Passkey authentication is not currently enabled. Use password or a configured OAuth provider to sign in.
 
-## How to Set Up a Passkey
-1. Sign in with your operator credentials.
-2. Navigate to **Profile &rarr; Security** in the account menu.
-3. Under *Biometric Passkeys & FIDO2*, click **Register New Passkey**.
-4. When prompted by your operating system, verify your Touch ID, Face ID, or touch your YubiKey.
-5. Your passkey is now active and ready for one-touch login on the **Sign In with Passkey** screen.
+Sentinel will only enable WebAuthn after server-issued challenges, credential persistence, origin and relying-party validation, signature-counter handling, and assertion verification are implemented. A browser prompt by itself is not an authentication mechanism.
     `,
   },
   {
@@ -654,24 +649,17 @@ The **Sentinel AI Workspace** is an interactive analysis environment where opera
   {
     slug: 'passkeys',
     categoryId: 'troubleshooting',
-    title: 'Troubleshooting Passkey & Biometric Sign-In',
-    summary: 'Diagnosing platform authenticator errors, browser permission blocks, and timeout issues.',
+    title: 'Passkey Sign-In Is Unavailable',
+    summary: 'Why passkey controls are disabled and which sign-in methods to use instead.',
     readTime: '3 min read',
     lastUpdated: 'September 2026',
     keywords: ['passkey troubleshooting', 'touch id error', 'webauthn failed', 'not allowed'],
     content: `
-# Troubleshooting Passkeys
+# Passkey Sign-In Is Unavailable
 
-If you encounter issues signing in with a Passkey:
+Sentinel does not currently expose passkey enrollment or sign-in. Use password or a configured OAuth provider. Administrators can confirm provider status under **Owner &rarr; Authentication Providers**.
 
-### 1. Browser Support
-Ensure you are using a modern browser engine (Safari 16+, Chrome 108+, Edge 108+, Firefox 122+) on a device with biometric sensors or a FIDO2 hardware key.
-
-### 2. HTTPS or Localhost Requirement
-WebAuthn is strictly restricted to secure contexts (\`https://\` or \`http://localhost\`).
-
-### 3. User Cancelled Prompt
-If you accidentally dismissed the OS biometric prompt, click **Sign in with Passkey** again to re-trigger the challenge.
+Passkeys must remain disabled until the complete server-side WebAuthn registration and authentication ceremonies are implemented and independently tested.
     `,
   },
   {

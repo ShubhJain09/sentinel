@@ -108,7 +108,7 @@ async function runCiCheck() {
 
     // Verify owner account exists
     const owner = db.prepare("SELECT * FROM users WHERE role = 'owner'").get();
-    assert(!!owner, `Registered OWNER account present: ${owner ? owner.email : 'none'}`);
+    assert(!!owner, 'Registered OWNER account present');
     if (owner) {
       assert(owner.passwordHash && owner.passwordHash.startsWith('$2'), 'Owner password stored as valid bcrypt hash');
     }
@@ -195,6 +195,33 @@ async function runCiCheck() {
     aiWorkspaceContent.includes('shareAiConversationAction'),
     'Task 2 verification: Truthful share action integrated'
   );
+
+  // 5. Authentication exposure regression checks
+  console.log('\n--- 5. Authentication Exposure Regression Checks ---');
+  const readSource = (relativePath) => fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
+  const loginSource = readSource('app/(auth)/login/page.tsx');
+  const authSource = readSource('app/lib/auth.ts');
+  const middlewareSource = readSource('middleware.ts');
+  const dbSource = readSource('app/lib/db.ts');
+  const emailSource = readSource('app/lib/email.ts');
+  const profilePageSource = readSource('app/(app)/profile/page.tsx');
+  const ownerActionSource = readSource('app/actions/owner.ts');
+
+  assert(!loginSource.includes('defaultValue='), 'Fresh login form has no server-supplied credential defaults');
+  assert(!loginSource.includes('navigator.credentials'), 'Unverified client-only passkey login is disabled');
+  assert(!authSource.includes('fallback-secret'), 'Session signing has no predictable fallback secret');
+  assert(!middlewareSource.includes('fallback-secret'), 'Middleware verification has no predictable fallback secret');
+  assert(authSource.includes(".setAudience('sentinel-session')"), 'Session JWTs are audience-bound');
+  assert(middlewareSource.includes("audience: 'sentinel-session'"), 'Middleware enforces session JWT audience');
+  assert(!emailSource.includes('previewUrl: resetUrl'), 'Password reset tokens are not persisted in email logs');
+  assert(!emailSource.includes('previewUrl: otp'), 'Login OTP codes are not persisted in email logs');
+  assert(!emailSource.includes('Reset URL: ${resetUrl}'), 'Password reset tokens are not printed to logs');
+  assert(!emailSource.includes('OTP Code: ${otp}'), 'Login OTP codes are not printed to logs');
+  assert(!ownerActionSource.includes('tempPassword'), 'Invitation responses do not return plaintext temporary passwords');
+  assert(!profilePageSource.includes('initialUser={user}'), 'Profile client receives an explicit safe DTO, not a full user row');
+  assert(dbSource.includes('safeUserColumns'), 'User administration queries exclude password hashes');
+  assert(dbSource.includes('WHERE id = ? AND workspaceId = ?'), 'Workspace-owned records use compound ownership lookups');
+  assert(dbSource.includes('idx_users_email_nocase'), 'Email uniqueness is enforced case-insensitively');
 
   console.log(`\n========================================`);
   console.log(`RESULTS: ${passes} passed, ${failures} failed.`);

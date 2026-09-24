@@ -1,6 +1,7 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const Database = require('better-sqlite3');
 const { SignJWT } = require('jose');
 
 const PORT = 3000;
@@ -15,12 +16,15 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sentinel-dev-secret-key-change-in-production-32chars';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) throw new Error('JWT_SECRET is required');
 const encodedKey = new TextEncoder().encode(JWT_SECRET);
 
 async function createToken(payload) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('sentinel')
+    .setAudience('sentinel-session')
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(encodedKey);
@@ -115,13 +119,18 @@ async function run() {
 
   // Test 4: Authenticated OWNER Session
   console.log('\n[Test 4] Verifying Authenticated OWNER Session Access...');
+  const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'sentinel.db');
+  const db = new Database(dbPath, { readonly: true });
+  const owner = db.prepare("SELECT * FROM users WHERE role = 'owner' AND isActive = 1 ORDER BY createdAt ASC LIMIT 1").get();
+  db.close();
+  if (!owner) throw new Error('No active owner account found for E2E test.');
   const ownerToken = await createToken({
-    userId: 'usr_owner_001',
-    email: 'workspaceshubhjain@gmail.com',
-    name: 'Shubh Jain',
-    role: 'owner',
-    avatarInitials: 'SJ',
-    workspaceId: 'ws_prod_001',
+    userId: owner.id,
+    email: owner.email,
+    name: owner.name,
+    role: owner.role,
+    avatarInitials: owner.avatarInitials,
+    workspaceId: owner.workspaceId,
   });
   const ownerCookie = `sentinel-session=${ownerToken}`;
 

@@ -12,8 +12,8 @@ export default async function InvestigationsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const findings = getAllFindings();
-  const allEvidence = getAllEvidence();
+  const findings = getAllFindings(session.workspaceId);
+  const allEvidence = getAllEvidence(session.workspaceId);
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6 py-12 space-y-10">

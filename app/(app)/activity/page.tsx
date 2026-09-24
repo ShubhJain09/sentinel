@@ -12,7 +12,7 @@ export default async function ActivityPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const events = getAllAuditEvents(100);
+  const events = getAllAuditEvents(100, session.workspaceId);
 
   return <ActivityContent events={events} />;
 }

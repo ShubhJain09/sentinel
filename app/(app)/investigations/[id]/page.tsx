@@ -18,13 +18,13 @@ export default async function InvestigationDetailPage({
   if (!session) redirect('/login');
 
   const { id } = await params;
-  const finding = getFindingById(id);
+  const finding = getFindingById(id, session.workspaceId);
 
   if (!finding) {
     notFound();
   }
 
-  const evidenceList = getEvidenceForFinding(finding.id);
+  const evidenceList = getEvidenceForFinding(finding.id, session.workspaceId);
 
   return <InvestigationReplayView finding={finding} evidenceList={evidenceList} />;
 }

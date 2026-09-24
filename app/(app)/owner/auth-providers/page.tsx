@@ -37,7 +37,7 @@ export default async function AuthProvidersPage() {
           </span>
         </div>
         <p className="text-[var(--text-secondary)] text-[13px] mt-1">
-          Inspect OAuth 2.0 / OIDC integrations, W3C WebAuthn hardware passkeys, and authentication policy enforcements across the platform.
+          Inspect OAuth 2.0 / OIDC integrations, password policy, and the disabled status of unfinished authentication methods.
         </p>
       </div>
 
@@ -236,34 +236,34 @@ APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n..."`}
                 </div>
               </div>
 
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-[var(--status-safe-subtle)] text-[var(--status-safe)] border border-[var(--status-safe-border)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-safe)]" />
-                Active
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-[var(--well)] text-[var(--text-secondary)] border border-[var(--border-hairline)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)]" />
+                Not configured
               </span>
             </div>
 
             <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed">
-              Hardware-bound biometric authentication (Apple Touch ID, Face ID, Windows Hello, and YubiKey FIDO2 keys). Zero shared secrets transmitted over the network.
+              Passkey authentication is disabled until server-issued challenges, credential persistence, and assertion verification are implemented.
             </p>
 
             <div className="space-y-2 text-[12px] bg-[var(--well)] p-3 rounded-2xl border border-[var(--border-hairline)] font-mono">
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-tertiary)]">Relying Party:</span>
-                <span className="text-[var(--text-primary)]">Dynamic Hostname Enclave</span>
+                <span className="text-[var(--text-primary)]">Not configured</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-tertiary)]">User Verification:</span>
-                <span className="text-[var(--text-secondary)]">Preferred (Biometric / PIN)</span>
+                <span className="text-[var(--text-secondary)]">Unavailable</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-tertiary)]">Enrollment:</span>
-                <span className="text-[var(--text-secondary)]">Profile → Security Tab</span>
+                <span className="text-[var(--text-secondary)]">Disabled</span>
               </div>
             </div>
           </div>
 
           <div className="pt-3 border-t border-[var(--border-hairline)] text-[12px] text-[var(--text-secondary)]">
-            <span>Passkeys are natively supported in all modern WebKit, Chromium, and Gecko engines.</span>
+            <span>Browser support alone is insufficient; SENTINEL requires a complete server-side WebAuthn ceremony before enabling this provider.</span>
           </div>
         </div>
 
@@ -308,7 +308,7 @@ APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n..."`}
           </div>
 
           <div className="pt-3 border-t border-[var(--border-hairline)] text-[12px] text-[var(--text-secondary)]">
-            <span>Passkey and OAuth logins link directly with this master operator record.</span>
+            <span>Configured OAuth logins link directly with this operator record; passkeys remain disabled.</span>
           </div>
         </div>
 

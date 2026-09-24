@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const baseUrl = getBaseUrl(request);
   const redirectUri = process.env.APPLE_REDIRECT_URI?.trim() || `${baseUrl}/api/auth/callback/apple`;
   const state = crypto.randomUUID();
+  const nonce = crypto.randomUUID();
 
   const authUrl = new URL('https://appleid.apple.com/auth/authorize');
   authUrl.searchParams.set('client_id', clientId);
@@ -31,14 +32,22 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set('response_mode', 'form_post');
   authUrl.searchParams.set('scope', 'name email');
   authUrl.searchParams.set('state', state);
+  authUrl.searchParams.set('nonce', nonce);
 
   const response = NextResponse.redirect(authUrl.toString());
   response.cookies.set('sentinel_apple_oauth_state', state, {
     httpOnly: true,
     secure: baseUrl.startsWith('https:'),
-    sameSite: 'lax',
+    sameSite: baseUrl.startsWith('https:') ? 'none' : 'lax',
     path: '/',
     maxAge: 600, // 10 minutes
+  });
+  response.cookies.set('sentinel_apple_oauth_nonce', nonce, {
+    httpOnly: true,
+    secure: baseUrl.startsWith('https:'),
+    sameSite: baseUrl.startsWith('https:') ? 'none' : 'lax',
+    path: '/',
+    maxAge: 600,
   });
 
   return response;

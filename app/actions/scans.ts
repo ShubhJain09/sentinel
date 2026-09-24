@@ -23,7 +23,7 @@ export async function runNewScan(formData: FormData) {
   const scope = scopeChecks.length > 0 ? scopeChecks : ['permissions', 'boundaries'];
 
   const db = getDb();
-  const scanId = `SCAN-${String(Math.floor(100 + Math.random() * 900))}`;
+  const scanId = `SCAN-${generateId().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
   const timestamp = now();
   const provider = getActiveProvider();
 
@@ -76,33 +76,59 @@ export async function runNewScan(formData: FormData) {
   const completedAt = now();
   const durationMs = inspectionResult.durationMs;
 
-  // 4. Save evidence traces generated during inspection
-  for (const step of inspectionResult.steps) {
+  // 4. Persist a finding and its evidence only within this scan's workspace.
+  // Never attach a new user's evidence to a shared seeded finding.
+  if (inspectionResult.verdict !== 'passed') {
+    const findingId = `SNT-${generateId().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
     db.prepare(`
-      INSERT INTO evidence (id, findingId, type, title, content, source, isAiGenerated, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO findings (
+        id, scanId, title, severity, classification, status, target, detail,
+        observed, expected, impact, recommendation, assignedTo, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, 'verified', 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      generateId(),
-      'SNT-001', // Link to core finding
-      step.status === 'failed' ? 'observation' : 'log',
-      `${step.stage} - ${step.toolUsed}`,
-      step.observation,
-      `inspection-runner:${target.toLowerCase().replace(/\s+/g, '-')}`,
-      provider.id === 'trueforge' && inspectionResult.metadata ? 1 : 0,
+      findingId,
+      scanId,
+      `${target} inspection requires review`,
+      inspectionResult.verdict === 'failed' ? 'high' : 'medium',
+      target,
+      'The security inspection returned a result that requires operator review.',
+      inspectionResult.steps.map((step) => step.observation).join('\n'),
+      'The target should satisfy every selected security boundary check.',
+      'Unreviewed runtime behavior may exceed the intended security boundary.',
+      'Review the attached inspection evidence and create a bounded remediation proposal if needed.',
+      session.userId,
+      completedAt,
       completedAt
     );
+
+    for (const step of inspectionResult.steps) {
+      db.prepare(`
+        INSERT INTO evidence (id, findingId, type, title, content, source, isAiGenerated, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        generateId(),
+        findingId,
+        step.status === 'failed' ? 'observation' : 'log',
+        `${step.stage} - ${step.toolUsed}`,
+        step.observation,
+        `inspection-runner:${target.toLowerCase().replace(/\s+/g, '-')}`,
+        provider.id === 'trueforge' && inspectionResult.metadata ? 1 : 0,
+        completedAt
+      );
+    }
   }
 
   // 5. Update scan with completed status and outcome
   db.prepare(`
     UPDATE scans 
     SET status = 'completed', result = ?, checksCompleted = checks, completedAt = ?, duration = ?
-    WHERE id = ?
+    WHERE id = ? AND workspaceId = ?
   `).run(
     inspectionResult.verdict,
     completedAt,
     durationMs,
-    scanId
+    scanId,
+    session.workspaceId
   );
 
   // 6. Log completion audit event

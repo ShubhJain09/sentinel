@@ -12,8 +12,8 @@ export default async function ApprovalsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const approvals = getAllApprovals();
-  const findings = getAllFindings();
+  const approvals = getAllApprovals(session.workspaceId);
+  const findings = getAllFindings(session.workspaceId);
 
   return <ApprovalsContent approvals={approvals} findings={findings} session={session} />;
 }
