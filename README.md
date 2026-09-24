@@ -10,6 +10,7 @@ SENTINEL turns agent activity into inspectable evidence, findings, remediation p
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TrueForge](https://img.shields.io/badge/TrueForge-live%20integration-6D5DFC)](#trueforge-integration)
+[![Sentinel CI/CT Pipeline](https://github.com/ShubhJain09/sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/ShubhJain09/sentinel/actions/workflows/ci.yml)
 [![Checks](https://img.shields.io/badge/verification-50%20checks%20passing-22C55E)](#verification)
 [![License](https://img.shields.io/badge/license-proprietary-64748B)](#license)
 
@@ -224,7 +225,7 @@ scripts/                Verification, migration, and reproduction utilities
 The following items are **planned**, not implemented claims:
 
 - Add sanitized AI Workspace and audit-log captures after masking runtime and user identifiers.
-- Add a GitHub Actions workflow for repeatable pull-request verification.
+- Expand the existing GitHub Actions pipeline with provider contract and end-to-end browser checks.
 - Expand provider contract tests with recorded, secret-free fixtures.
 - Add deployment guidance for hosted database and secret-management environments.
 

@@ -172,6 +172,45 @@ db.exec(`
     FOREIGN KEY (defaultWorkspace) REFERENCES workspaces(id)
   );
 
+  CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL,
+    environment TEXT NOT NULL,
+    ownerId TEXT NOT NULL,
+    workspaceId TEXT NOT NULL,
+    trustScore INTEGER NOT NULL,
+    shadowMode INTEGER NOT NULL DEFAULT 0,
+    capabilities TEXT NOT NULL,
+    trustGraph TEXT NOT NULL,
+    driftStatus TEXT NOT NULL DEFAULT 'clean',
+    driftDetails TEXT,
+    shadowTelemetry TEXT NOT NULL,
+    lastVerifiedAt TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (ownerId) REFERENCES users(id),
+    FOREIGN KEY (workspaceId) REFERENCES workspaces(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_conversations (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    workspaceId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    messages TEXT NOT NULL,
+    shareToken TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(id),
+    FOREIGN KEY (workspaceId) REFERENCES workspaces(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspaceId);
+  CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations(userId, updatedAt DESC);
+
   CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id TEXT PRIMARY KEY,
     userId TEXT NOT NULL,

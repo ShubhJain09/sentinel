@@ -40,6 +40,9 @@ jobs:
       - name: ESLint Code Quality
         run: npm run lint
 
+      - name: Initialize CI Database
+        run: node scripts/init-db.js
+
       - name: Automated Security & Architecture Tests
         run: npm test
 
